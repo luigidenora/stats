@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graph showcase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --page: #050505; --text: #f4f4f1; --mute: #9a9a94; --rule: #2c2c29; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px 16px 64px; background: var(--page); color: var(--text); font-family: 'Barlow Condensed', sans-serif; }
+    ::selection { background: #f2cc1d; color: #000; }
+    main { max-width: 1200px; margin: 0 auto; }
+    header { padding-bottom: 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+    h1 { margin: 0 0 8px; font: 600 22px 'Barlow Condensed', sans-serif; letter-spacing: 0.01em; }
+    header p { margin: 0; color: var(--mute); max-width: 75ch; line-height: 1.45; }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-top: 14px; font: 600 14px 'Barlow Condensed', sans-serif; }
+    .legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 660px), 1fr)); gap: 16px; }
+    article { border: 1px solid var(--rule); }
+    article h2 { margin: 0; padding: 12px 14px 0; font: 600 17px 'Barlow Condensed', sans-serif; }
+    article p { margin: 0; padding: 6px 14px 12px; color: var(--mute); font-size: 14px; line-height: 1.45; min-height: 4.4em; }
+    .tag { font: 600 12px 'Barlow Condensed', sans-serif; color: var(--text); background: #222220; border: 1px solid var(--text); padding: 1px 4px; margin-left: 8px; vertical-align: 2px; }
+    .stage { position: relative; height: 200px; overflow: hidden; }
+    .stage.dark { background: radial-gradient(80% 140% at 30% 30%, #1e2b34, #07090b 75%); }
+    .stage.bright { background: radial-gradient(90% 160% at 60% 20%, #ffffff, #c4ccbf); }
+    /* The real overlay, laid inside the card instead of over a canvas. */
+    .stage .tez-stats { position: absolute; inset: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Graph showcase</h1>
+      <p>Each card runs the real overlay in Performance mode (the memory leak in Memory mode), fed with simulated data. The mode plate (display icon and code) steps to the next mode on each click; the caret beside it, or a right click, opens the list. Readouts sit bottom-left with the mode’s graphs beside them: frame, CPU and GPU apart, merged into one RGB graph only when there is no room.</p>
+      <div class="legend">
+        <span style="--c:#ff3b30">frame</span>
+        <span style="--c:#2ee84a">GPU</span>
+        <span style="--c:#4f7dff">CPU</span>
+        <span style="--c:#ffff7a">frame + GPU</span>
+        <span style="--c:#7dffff">GPU + CPU</span>
+        <span style="--c:#ffb8ff">frame + CPU</span>
+        <span style="--c:#ffffff">tutti e tre</span>
+      </div>
+    </header>
+    <div class="grid" id="grid"></div>
+  </main>
+  <script type="module" src="./showcase.ts"></script>
+</body>
+</html>

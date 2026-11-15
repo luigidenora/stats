@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graph preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; padding: 24px 16px; background: #050505; color: #f4f4f1; font-family: 'Barlow Condensed', sans-serif; }
+    h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+    p { margin: 0 0 20px; color: #8d8d88; font-size: 14px; max-width: 70ch; }
+    .rows { display: grid; gap: 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; }
+    .scene { position: relative; padding: 14px 16px; display: grid; gap: 6px; }
+    .scene.dark { background: radial-gradient(80% 120% at 30% 40%, #1d2a33, #07090b 70%); }
+    .scene.bright { background: radial-gradient(80% 120% at 60% 30%, #ffffff, #c9d1c4); }
+    .name { font-size: 13px; font-weight: 600; color: #8d8d88; }
+    .scene.bright .name { color: #3a3a37; }
+    .scene .tez-stats { position: static; padding: 0; justify-content: flex-start; }
+  </style>
+</head>
+<body>
+  <h1>Graphs with simulated data</h1>
+  <p>Left: frame time, one column per frame, white on time, yellow when one refresh was missed (over 1.25× the budget), red when two or more were (over 2.25×), dotted line at the budget. Right: CPU (red) and GPU (green), adding up to yellow where they overlap. Each scenario runs on a dark and a bright background.</p>
+  <div class="rows" id="rows"></div>
+  <script type="module" src="./graphs.ts"></script>
+</body>
+</html>

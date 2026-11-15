@@ -1,0 +1,85 @@
+{
+  "name": "@three.ez/stats",
+  "version": "1.0.0",
+  "description": "Read-only statistics overlay for three.js: frame timing, renderer counters, memory and GPU time.",
+  "author": "Luigi Denora (https://github.com/luigidenora)",
+  "license": "MIT",
+  "type": "module",
+  "module": "./build/index.js",
+  "types": "./build/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/types/index.d.ts",
+      "import": "./build/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "build",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "three",
+    "three.js",
+    "threejs",
+    "stats",
+    "performance",
+    "profiling",
+    "overlay",
+    "webgl",
+    "webgpu"
+  ],
+  "homepage": "https://github.com/luigidenora/stats#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/luigidenora/stats.git"
+  },
+  "bugs": {
+    "url": "https://github.com/luigidenora/stats/issues"
+  },
+  "scripts": {
+    "start": "vite",
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "build:site": "vite build -c vite.site.config.ts",
+    "preview:site": "vite preview -c vite.site.config.ts",
+    "prepack": "npm run build",
+    "typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.node.json",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix --max-warnings=0",
+    "lint:style": "eslint -c eslint.style.config.js src",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:package": "node scripts/check-package.ts",
+    "check": "npm run build && npm run lint && npm run typecheck && npm test && npm run test:package",
+    "release": "npm run check && npm publish"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@stylistic/eslint-plugin": "5.10.0",
+    "@three.ez/instanced-mesh": "1.0.0-beta.1",
+    "@three.ez/main": "0.5.12",
+    "@tweakpane/core": "2.0.5",
+    "@types/node": "26.6.6",
+    "@types/three": "0.186.0",
+    "@vitest/coverage-v8": "5.0.5",
+    "eslint": "10.14.0",
+    "happy-dom": "21.0.4",
+    "three": "0.186.1",
+    "tweakpane": "4.0.5",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vite": "8.3.7",
+    "vitest": "5.0.5"
+  },
+  "peerDependencies": {
+    "three": ">=0.159.0"
+  }
+}

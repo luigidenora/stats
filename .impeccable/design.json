@@ -1,0 +1,416 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-13T20:13:33+00:00",
+  "title": "Design System: three.ez stats",
+  "extensions": {
+    "colorMeta": {
+      "signal-yellow": {
+        "role": "primary",
+        "displayName": "Signal Yellow",
+        "canonical": "#f2cc1d",
+        "tonalRamp": [
+          "#3a3312",
+          "#6e5f18",
+          "#aa9017",
+          "#edc50f",
+          "#e9cd4d",
+          "#e6d689",
+          "#ebe3bf",
+          "#f7f6ed"
+        ]
+      },
+      "clip-red": {
+        "role": "tertiary",
+        "displayName": "Clip Red",
+        "canonical": "#ff2a1f",
+        "tonalRamp": [
+          "#3c1210",
+          "#741813",
+          "#b3160e",
+          "#fa0d01",
+          "#f24c44",
+          "#ec8984",
+          "#eebfbc",
+          "#f8edec"
+        ]
+      },
+      "frame-red": {
+        "role": "secondary",
+        "displayName": "Frame Red",
+        "canonical": "#ff3b30",
+        "tonalRamp": [
+          "#3c1210",
+          "#741813",
+          "#b3170e",
+          "#fa0e01",
+          "#f24d44",
+          "#ec8984",
+          "#eebfbc",
+          "#f8edec"
+        ]
+      },
+      "gpu-green": {
+        "role": "secondary",
+        "displayName": "GPU Green",
+        "canonical": "#2ee84a",
+        "tonalRamp": [
+          "#14381a",
+          "#1d6a28",
+          "#1ea332",
+          "#1ae238",
+          "#55e16a",
+          "#8ee29b",
+          "#c1e9c7",
+          "#eef7ef"
+        ]
+      },
+      "cpu-blue": {
+        "role": "secondary",
+        "displayName": "CPU Blue",
+        "canonical": "#4f7dff",
+        "tonalRamp": [
+          "#101c3c",
+          "#132c74",
+          "#0e39b3",
+          "#0142fa",
+          "#4471f2",
+          "#849fec",
+          "#bcc9ee",
+          "#eceff8"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#f4f4f1",
+        "tonalRamp": [
+          "#292924",
+          "#49493e",
+          "#6a6a57",
+          "#8d8d6f",
+          "#a5a590",
+          "#bebeb2",
+          "#d8d8d2",
+          "#f3f3f2"
+        ]
+      },
+      "contour": {
+        "role": "neutral",
+        "displayName": "Contour",
+        "canonical": "rgb(0 0 0 / 0.85)"
+      },
+      "plate-grey": {
+        "role": "neutral",
+        "displayName": "Plate Grey",
+        "canonical": "#222220",
+        "tonalRamp": [
+          "#272726",
+          "#454542",
+          "#63635e",
+          "#81817a",
+          "#9d9d98",
+          "#babab6",
+          "#d6d6d4",
+          "#f2f2f2"
+        ]
+      },
+      "plate-level": {
+        "role": "neutral",
+        "displayName": "Plate Level",
+        "canonical": "#55554f",
+        "tonalRamp": [
+          "#272725",
+          "#454542",
+          "#64645e",
+          "#828279",
+          "#9e9e98",
+          "#babab6",
+          "#d6d6d4",
+          "#f2f2f2"
+        ]
+      },
+      "menu-ground": {
+        "role": "neutral",
+        "displayName": "Menu Ground",
+        "canonical": "#0c0c0b",
+        "tonalRamp": [
+          "#272725",
+          "#454541",
+          "#64645d",
+          "#838378",
+          "#9f9f97",
+          "#babab6",
+          "#d6d6d4",
+          "#f3f3f2"
+        ]
+      },
+      "menu-hover": {
+        "role": "neutral",
+        "displayName": "Menu Hover",
+        "canonical": "#262624",
+        "tonalRamp": [
+          "#272726",
+          "#454542",
+          "#63635e",
+          "#81817a",
+          "#9d9d98",
+          "#b9b9b7",
+          "#d6d6d4",
+          "#f2f2f2"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#3a3a37",
+        "tonalRamp": [
+          "#272726",
+          "#454542",
+          "#63635e",
+          "#81817a",
+          "#9d9d99",
+          "#b9b9b7",
+          "#d6d6d4",
+          "#f2f2f2"
+        ]
+      },
+      "info-backdrop": {
+        "role": "neutral",
+        "displayName": "Info Backdrop",
+        "canonical": "#050505",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7e7e7e",
+          "#9b9b9b",
+          "#b8b8b8",
+          "#d5d5d5",
+          "#f2f2f2"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "readout-value": {
+        "displayName": "Readout Value",
+        "purpose": "Large band numbers: FPS, CPU/GPU ms, heap MB."
+      },
+      "readout-row": {
+        "displayName": "Readout Row",
+        "purpose": "Counter grid, right-edge rows, info-page values."
+      },
+      "unit": {
+        "displayName": "Unit",
+        "purpose": "Single unit after a number."
+      },
+      "stacked-label": {
+        "displayName": "Stacked Label",
+        "purpose": "Two-line uppercase label pair beside a value; axis labels, asides, level lists."
+      },
+      "plate": {
+        "displayName": "Plate",
+        "purpose": "Uppercase code inside a plate, cap height 10px on whole pixels."
+      },
+      "info-key": {
+        "displayName": "Info Key",
+        "purpose": "Uppercase keys on info pages."
+      },
+      "tooltip": {
+        "displayName": "Tooltip",
+        "purpose": "The only running text, max 280px."
+      }
+    },
+    "shadows": [
+      {
+        "name": "distribution-contour",
+        "value": "0 0 0 1px rgb(0 0 0 / 0.85)",
+        "purpose": "1px dark contour around the distribution bar; spread only."
+      },
+      {
+        "name": "info-backdrop",
+        "value": "0 0 0 200vmax #050505",
+        "purpose": "Info mode: blacks out the screen around the thumbnail cell."
+      }
+    ],
+    "motion": [
+      {
+        "name": "duration-layout",
+        "value": "280ms",
+        "purpose": "All FLIP moves, entries and exits."
+      },
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Moves and entries from the nearest edge."
+      },
+      {
+        "name": "ease-in",
+        "value": "cubic-bezier(0.55, 0, 0.75, 0.2)",
+        "purpose": "Exits: a still copy slides 8px past the nearest edge and fades."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "Layout changes become instant."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow-overlay",
+        "value": "640px (container width)",
+        "purpose": "Type steps down: value 22, row 17, stack 10, unit 13, plate 16/8; space-5 becomes 16px."
+      },
+      {
+        "name": "info-wide",
+        "value": "720px",
+        "purpose": "Info thumbnail beside pages above, edge to edge below."
+      },
+      {
+        "name": "side-distribution",
+        "value": "720px wide and 420px tall",
+        "purpose": "Vertical distribution on the right edge; otherwise in the bottom strip."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Readout Band",
+      "kind": "custom",
+      "description": "Top-left row of readouts: stacked uppercase label beside a 26px tabular value, ink with a 1px contour, no panel.",
+      "html": "<div class=\"ds-band\"><span class=\"ds-ro\"><span class=\"ds-stack\"><span>FPS</span><span>&nbsp;</span></span><span class=\"ds-val\">60</span></span><span class=\"ds-ro\"><span class=\"ds-stack\"><span>MS</span><span>CPU</span></span><span class=\"ds-val\">4.2</span></span><span class=\"ds-ro\"><span class=\"ds-stack\"><span>MS</span><span>GPU</span></span><span class=\"ds-val ds-alert\">19.8</span></span><span class=\"ds-ro\"><span class=\"ds-stack\"><span>MB</span><span>HEAP</span></span><span class=\"ds-val\">184</span></span></div>",
+      "css": ".ds-band{background:#3d4a52;padding:16px;display:inline-flex;gap:8px;align-items:center;font-family:'Barlow Condensed','Roboto Condensed','Arial Narrow',sans-serif;color:#f4f4f1;-webkit-text-stroke:2px rgb(0 0 0 / 0.85);paint-order:stroke fill;font-variant-numeric:tabular-nums;line-height:1;gap:24px;font-weight:500;}.ds-ro{display:flex;align-items:center;gap:4px;}.ds-stack{display:grid;font-size:11px;font-weight:600;line-height:0.95;letter-spacing:0.04em;text-align:right;}.ds-val{font-size:26px;min-width:3ch;}.ds-alert{color:#f2cc1d;}"
+    },
+    {
+      "name": "Plate",
+      "kind": "chip",
+      "refersTo": "plate",
+      "description": "Square dark plate with a 1px ink border for backend and state codes; no contour.",
+      "html": "<div class=\"ds-g\"><span class=\"ds-plate\">GL2</span><span class=\"ds-plate\">WGPU</span></div>",
+      "css": ".ds-g{background:#3d4a52;padding:16px;display:inline-flex;gap:8px;align-items:center;font-family:'Barlow Condensed','Roboto Condensed','Arial Narrow',sans-serif;color:#f4f4f1;}.ds-plate{display:inline-flex;align-items:center;height:18px;padding:0 4px;border:1px solid #f4f4f1;background:#222220;color:#f4f4f1;font-size:14.29px;font-weight:600;letter-spacing:0.04em;line-height:1;-webkit-text-stroke:0;font-family:inherit;margin:0;}"
+    },
+    {
+      "name": "DISP Button and Toggle",
+      "kind": "button",
+      "refersTo": "plate-toggle-on",
+      "description": "A plate that is a button: mode code in yellow; a toggle turns its text yellow while on; yellow 1px focus outline.",
+      "html": "<div class=\"ds-g\"><button class=\"ds-plate ds-btn\" aria-pressed=\"true\">WIRE</button><button class=\"ds-plate ds-btn\">DISP <span class=\"ds-code\">PERF</span></button></div>",
+      "css": ".ds-g{background:#3d4a52;padding:16px;display:inline-flex;gap:8px;align-items:center;font-family:'Barlow Condensed','Roboto Condensed','Arial Narrow',sans-serif;color:#f4f4f1;}.ds-plate{display:inline-flex;align-items:center;height:18px;padding:0 4px;border:1px solid #f4f4f1;background:#222220;color:#f4f4f1;font-size:14.29px;font-weight:600;letter-spacing:0.04em;line-height:1;-webkit-text-stroke:0;font-family:inherit;margin:0;}.ds-btn{gap:6px;cursor:pointer;}.ds-btn[aria-pressed=\"true\"],.ds-code{color:#f2cc1d;}.ds-btn:focus-visible{outline:1px solid #f2cc1d;outline-offset:2px;}"
+    },
+    {
+      "name": "DISP Menu",
+      "kind": "nav",
+      "refersTo": "menu",
+      "description": "Camera-style mode list opening upward from DISP: hairline rows, hover grey, current choice filled yellow.",
+      "html": "<div class=\"ds-menu\" role=\"menu\"><button class=\"ds-mi\" role=\"menuitemradio\" aria-checked=\"false\"><span>Simple</span><span class=\"ds-mc\">STD</span></button><button class=\"ds-mi\" role=\"menuitemradio\" aria-checked=\"true\"><span>Performance</span><span class=\"ds-mc\">PERF</span></button><button class=\"ds-mi\" role=\"menuitemradio\" aria-checked=\"false\"><span>Memory</span><span class=\"ds-mc\">MEM</span></button><button class=\"ds-mi\" role=\"menuitemradio\" aria-checked=\"false\"><span>Off</span><span class=\"ds-mc\">OFF</span></button></div>",
+      "css": ".ds-menu{display:grid;min-width:200px;border:1px solid #f4f4f1;background:#0c0c0b;font-family:'Barlow Condensed','Roboto Condensed','Arial Narrow',sans-serif;}.ds-mi{display:flex;justify-content:space-between;gap:16px;padding:8px 10px;border:0;border-bottom:1px solid #3a3a37;background:transparent;color:#f4f4f1;font-family:inherit;font-size:13.333px;font-weight:400;line-height:normal;letter-spacing:0.02em;text-align:left;cursor:pointer;}.ds-mi:last-child{border-bottom:0;}.ds-mi:hover,.ds-mi:focus-visible{background:#262624;outline:none;}.ds-mi[aria-checked=\"true\"]{background:#f2cc1d;color:#0c0c0b;}.ds-mc{font-weight:600;opacity:0.8;}"
+    },
+    {
+      "name": "Tooltip",
+      "kind": "custom",
+      "refersTo": "tooltip",
+      "description": "Instant hover explanation, styled like a plate.",
+      "html": "<div class=\"ds-g\"><div class=\"ds-tip\">GPU time per frame, in ms (timer query; unavailable on this backend shows a dash).</div></div>",
+      "css": ".ds-g{background:#3d4a52;padding:16px;display:inline-flex;gap:8px;align-items:center;font-family:'Barlow Condensed','Roboto Condensed','Arial Narrow',sans-serif;color:#f4f4f1;}.ds-tip{max-width:280px;padding:4px 8px;border:1px solid #f4f4f1;background:#222220;color:#f4f4f1;font-size:13px;font-weight:500;line-height:1.3;letter-spacing:0.01em;}"
+    },
+    {
+      "name": "Glyph Counters",
+      "kind": "custom",
+      "description": "16-unit vector glyphs: free silhouette with geometry contour for per-frame work, plate container for memory, dial for time.",
+      "html": "<div class=\"ds-g ds-cnt\"><span class=\"ds-pair\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" overflow=\"visible\"><g opacity=\"0.85\" fill=\"#000\" stroke=\"#000\" stroke-width=\"2\" stroke-linejoin=\"miter\" fill-rule=\"evenodd\"><path d=\"M0 2H11V9H0ZM1 3H10V8H1Z\"/><path d=\"M5.5 4L8 7H3Z\"/><path d=\"M12 4H13V11H12ZM2 10H12V11H2Z\"/><path d=\"M14 6H15V13H14ZM4 12H14V13H4Z\"/></g><g fill=\"currentColor\" fill-rule=\"evenodd\"><path d=\"M0 2H11V9H0ZM1 3H10V8H1Z\"/><path d=\"M5.5 4L8 7H3Z\"/><path d=\"M12 4H13V11H12ZM2 10H12V11H2Z\"/><path d=\"M14 6H15V13H14ZM4 12H14V13H4Z\"/></g></svg><span>128</span></span><span class=\"ds-pair\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2\" y=\"2\" width=\"12\" height=\"12\" fill=\"#222220\"/><rect x=\"2\" y=\"9\" width=\"12\" height=\"5\" fill=\"#55554f\"/><path d=\"M1 1H15V15H1ZM2 2H14V14H2Z\" fill=\"currentColor\" fill-rule=\"evenodd\"/><path d=\"M8 3.5L11.5 5.5V10.5L8 12.5L4.5 10.5V5.5Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linejoin=\"round\"/><path d=\"M4.5 5.5L8 7.5L11.5 5.5M8 7.5V12.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><span>42</span></span><span class=\"ds-pair\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" overflow=\"visible\"><g opacity=\"0.85\" fill=\"#000\" stroke=\"#000\"><circle cx=\"8\" cy=\"8\" r=\"7\" fill=\"none\" stroke-width=\"3\"/><path d=\"M8 8V3.5A4.5 4.5 0 1 1 5.355 11.641Z\" stroke-width=\"2\" stroke-linejoin=\"round\"/></g><circle cx=\"8\" cy=\"8\" r=\"7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\"/><path d=\"M8 8V3.5A4.5 4.5 0 1 1 5.355 11.641Z\" fill=\"currentColor\"/></svg><span>9.8</span></span></div>",
+      "css": ".ds-cnt{-webkit-text-stroke:2px rgb(0 0 0 / 0.85);paint-order:stroke fill;font-variant-numeric:tabular-nums;line-height:1;gap:24px;font-size:20px;font-weight:500;}.ds-pair{display:flex;align-items:center;gap:4px;}.ds-pair svg{color:#f4f4f1;display:block;}"
+    },
+    {
+      "name": "Time Graph",
+      "kind": "custom",
+      "refersTo": "time-graph",
+      "description": "132x32 scrolling graph: 1px ink box, budget ticks outside, samples ink / yellow past 1.25x / red past 2.25x, one dark contour around the union.",
+      "html": "<div class=\"ds-g\"><svg width=\"142\" height=\"42\" viewBox=\"0 0 142 42\" shape-rendering=\"crispEdges\"><g fill=\"rgb(0 0 0 / 0.85)\"><rect x=\"4\" y=\"4\" width=\"134\" height=\"34\"/><rect x=\"0\" y=\"20\" width=\"5\" height=\"3\"/><rect x=\"137\" y=\"20\" width=\"5\" height=\"3\"/></g><rect x=\"5.5\" y=\"5.5\" width=\"131\" height=\"31\" fill=\"none\" stroke=\"#f4f4f1\" stroke-width=\"1\"/><rect x=\"1\" y=\"21\" width=\"3\" height=\"1\" fill=\"#f4f4f1\"/><rect x=\"138\" y=\"21\" width=\"3\" height=\"1\" fill=\"#f4f4f1\"/><g fill=\"#f4f4f1\"><rect x=\"6\" y=\"26\" width=\"40\" height=\"10\"/><rect x=\"46\" y=\"25\" width=\"30\" height=\"11\"/><rect x=\"96\" y=\"27\" width=\"40\" height=\"9\"/></g><rect x=\"76\" y=\"14\" width=\"10\" height=\"22\" fill=\"#f2cc1d\"/><rect x=\"86\" y=\"8\" width=\"4\" height=\"28\" fill=\"#ff2a1f\"/><rect x=\"90\" y=\"24\" width=\"6\" height=\"12\" fill=\"#f4f4f1\"/></svg></div>",
+      "css": ".ds-g{background:#3d4a52;padding:16px;display:inline-flex;gap:8px;align-items:center;font-family:'Barlow Condensed','Roboto Condensed','Arial Narrow',sans-serif;color:#f4f4f1;}.ds-g svg{display:block;}"
+    },
+    {
+      "name": "Distribution Bar",
+      "kind": "custom",
+      "description": "Levels as one bordered bar: solid, hatched, dotted, outline fills separated by 2px of contour.",
+      "html": "<div class=\"ds-g\"><div class=\"ds-dist\"><span style=\"flex:5\" class=\"ds-s0\"></span><span style=\"flex:3\" class=\"ds-s1\"></span><span style=\"flex:2\" class=\"ds-s2\"></span><span style=\"flex:1\" class=\"ds-s3\"></span></div></div>",
+      "css": ".ds-g{background:#3d4a52;padding:16px;display:inline-flex;gap:8px;align-items:center;font-family:'Barlow Condensed','Roboto Condensed','Arial Narrow',sans-serif;color:#f4f4f1;}.ds-dist{display:flex;width:132px;height:14px;border:1px solid #f4f4f1;box-shadow:0 0 0 1px rgb(0 0 0 / 0.85);}.ds-dist span{min-width:0;}.ds-dist span+span{border-left:2px solid rgb(0 0 0 / 0.85);}.ds-s0{background:#f4f4f1;}.ds-s1{background:repeating-linear-gradient(135deg,#f4f4f1 0 1.5px,transparent 1.5px 4px);}.ds-s2{background:radial-gradient(#f4f4f1 0.9px,transparent 1.1px) 0 0/4px 4px;}.ds-s3{box-shadow:inset 0 0 0 1px #f4f4f1;}"
+    },
+    {
+      "name": "Info Page",
+      "kind": "card",
+      "description": "Detailed info screen: heading with yellow page count over an ink rule, uppercase keys left, values right, hairline rows.",
+      "html": "<div class=\"ds-info\"><div class=\"ds-ih\"><span>RENDERER</span><span class=\"ds-ic\">2/5</span></div><div class=\"ds-ir\"><span class=\"ds-ik\">Backend</span><span>WebGL 2</span></div><div class=\"ds-ir\"><span class=\"ds-ik\">Buffer</span><span>2560 × 1440</span></div><div class=\"ds-ir\"><span class=\"ds-ik\">Pixel ratio</span><span>2</span></div></div>",
+      "css": ".ds-info{background:#050505;padding:16px;width:320px;color:#f4f4f1;font-family:'Barlow Condensed','Roboto Condensed','Arial Narrow',sans-serif;font-size:20px;font-weight:500;line-height:1;-webkit-text-stroke:2px rgb(0 0 0 / 0.85);paint-order:stroke fill;font-variant-numeric:tabular-nums;line-height:1;}.ds-ih{display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid #f4f4f1;font-weight:600;letter-spacing:0.04em;}.ds-ic{color:#f2cc1d;}.ds-ir{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid #3a3a37;}.ds-ik{font-size:15px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Camera Display Over a Render Loop",
+    "overview": "The overlay reads the way a technical camera display reads over a live image. Indicators hug the edges of the frame and the centre always belongs to the scene. There are no panels and no cards: values are drawn straight onto the canvas in white condensed tabular numerals, each with a 1px dark contour so it stays legible on any image. Containers exist only where a camera display would use them: small dark plates with a 1px white border for state (backend, DISP, toggles), the DISP menu, the tooltip, and the info pages.\n\nDensity is high but disciplined. Detail is set by levels (display modes cycled with DISP), never all at once. Positions are fixed per mode, so numbers never jump between frames. Colour is almost absent: the readout is ink on image. Yellow is the only voice for \"look here\", red means a budget badly missed, and the three series colours (red, green, blue) appear only while the graph that uses them is on screen, where they add up like light.\n\nMotion is mechanical and edge-bound. When a mode changes, elements that move glide to their new grid cell. Elements that leave slide out past the nearest edge of the overlay and never fade in place. Under reduced motion, changes are instant.",
+    "keyCharacteristics": [
+      "White condensed tabular numerals with a 1px dark contour, with no backing panel.",
+      "Values sit beside their labels. Labels are short uppercase pairs stacked to one side of the number.",
+      "Dark plates with a 1px white border are the only filled containers in the readout layer.",
+      "Square corners everywhere. Every line is 1px and lands on whole pixels.",
+      "Additive RGB graphs: channels meet in white, and one contour surrounds their union.",
+      "Yellow for alert and current choice, red for out of range, everything else ink.",
+      "A fixed corner grid with a free centre. Nothing animates except layout changes."
+    ],
+    "rules": [
+      {
+        "name": "The Yellow Means Look Rule",
+        "body": "Yellow is reserved for alerts and for the current choice. It never decorates, never labels a series, and never fills an area except the checked menu row.",
+        "section": "colors"
+      },
+      {
+        "name": "The Colour Only With Its Graph Rule",
+        "body": "The labels of a readout carry the CPU and GPU series colours only while the Performance graphs are on screen. In every other mode they go back to ink. Glyphs and dials always stay ink, even inside an alert or a coloured label.",
+        "section": "colors"
+      },
+      {
+        "name": "The Alerts Change Colour Only Rule",
+        "body": "An alert changes the colour of a value and nothing else: no weight change, no size change, no badge. The layout never moves.",
+        "section": "colors"
+      },
+      {
+        "name": "The Beside Not Above Rule",
+        "body": "A label sits beside its value, never above it as a heading. Numbers hug their label: a number before a unit or plate is right-aligned, and a number after a stacked label is left-aligned. The reserved width (a minimum width in `ch`) stays on the far side.",
+        "section": "typography"
+      },
+      {
+        "name": "The Contour Rule",
+        "body": "All text on the canvas carries a 2px stroke in contour colour painted under the fill (`paint-order: stroke fill`), so exactly 1px of contour shows outside each glyph. Text inside plates, the menu and the tooltip has no stroke, because those already sit on a dark ground.",
+        "section": "typography"
+      },
+      {
+        "name": "The Free Centre Rule",
+        "body": "Every element lives in an edge cell. A new component gets a grid area at an edge, takes its gaps from the spacing scale, exits past its nearest edge, and hides in Off.",
+        "section": "layout"
+      },
+      {
+        "name": "The Contour Not Shadow Rule",
+        "body": "Separation from the image is always a centred 1px dark contour: text-stroke for text, geometry 1px wider for glyphs and graphs, spread-only box-shadow for boxes. Plates never get a contour.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do draw every value straight onto the canvas in ink, with the 1px contour (2px stroke painted under the fill).",
+      "Do take every gap from the spacing scale (4, 8, 12, 16, 24), and give every new element an edge grid cell.",
+      "Do put labels beside values as short uppercase stacked pairs, and keep numerals tabular with a reserved width.",
+      "Do use a plate (1px ink border, plate-grey, square) for any state code or control.",
+      "Do signal an alert by changing colour to signal yellow only, and reserve clip red for a badly missed budget.",
+      "Do show unavailable metrics as an em dash, a dashed dial, or an empty graph, never as zero.",
+      "Do composite overlapping series additively and surround their union with one contour.",
+      "Do make leaving elements exit past the nearest edge in 280ms, and respect reduced motion.",
+      "Do render glyphs at 16px or a multiple of it, with ink in currentColor and the category shown by the container."
+    ],
+    "donts": [
+      "Don't put a backing panel or card behind the readouts. The only filled containers are plates, the menu, the tooltip and the info pages.",
+      "Don't round the corners of boxes, use offset or blurred shadows, or use gradients as shading. The only gradients are the hatched and dotted pattern fills of the distribution levels.",
+      "Don't use yellow for decoration or series identity, or colour readout labels when their graph is not on screen.",
+      "Don't change weight, size or position to signal an alert.",
+      "Don't place anything in the centre of the overlay.",
+      "Don't set a label above its value as a heading or eyebrow.",
+      "Don't fade an element out in place. It leaves past the nearest edge.",
+      "Don't name the camera that inspired the interface anywhere. Describe it only as a camera-like technical readout."
+    ]
+  }
+}
