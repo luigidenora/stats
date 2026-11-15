@@ -207,3 +207,10 @@ describe('probe', () => {
     expect(probe.selected).toBeNull();
   });
 });
+
+describe('production no-op budgets', () => {
+  it('match the desktop profile of the real overlay', async () => {
+    const { PROFILE_BUDGETS } = await import('../src/budgets.js');
+    expect(new NoopStats(fakeRenderer({ canvas: document.createElement('canvas') })).budgets).toEqual(PROFILE_BUDGETS.desktop);
+  });
+});

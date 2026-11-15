@@ -47,7 +47,7 @@ for (const name of EXPORTS) {
 // The no-op imports without a DOM and answers every public member of the real class.
 const noopSource = readFileSync('build/noop.js', 'utf8');
 if (noopSource.length > NOOP_MAX_BYTES) problems.push(`build/noop.js is ${noopSource.length} bytes (limit ${NOOP_MAX_BYTES})`);
-if (/from\s*["']\.\/(index|dev|stats)/.test(noopSource)) problems.push('build/noop.js imports the real overlay');
+if (/\bimport\b/.test(noopSource)) problems.push('build/noop.js imports another file: it must stand alone');
 const real = (bundle['Stats'] as { prototype: object }).prototype;
 const noop = ((await import(pathToFileURL('build/noop.js').href) as Record<string, unknown>)['Stats'] as { prototype: object }).prototype;
 const agent = await import(pathToFileURL('build/agent.js').href) as Record<string, unknown>;

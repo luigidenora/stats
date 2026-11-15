@@ -265,6 +265,15 @@ A scrolling graph with one 1px track per sample, inside a 1px ink box.
 ### Image Histogram
 A 256×88 additive RGB histogram of the rendered image, in the same box language. The x axis is the value and the y axis is a square-root count. Edge bins never set the scale. A non-empty edge (more than 1% of pixels clipped) lights a 2px signal-yellow mark on that edge, and its HI/LO summary turns yellow. Axis labels sit underneath, and channel names are labels coloured by channel.
 
+### Image Scopes
+The waveform (128×64) and the vectorscope (64×64) are density plots in the same 1px ink box with the dark contour. They are the one place with a filled interior: a dark screen (`rgb(0 0 0 / 0.8)`) behind the points, because a density plot needs a ground to read on a bright scene. Waveform points are ink, with the clipped top row in alert yellow. Vectorscope points take the hue they stand for; a 5px ink cross marks neutral and six 2px marks the colour targets.
+
+### Canvas Aids
+Zebra and framing guides belong to the picture, not to the readouts: they sit under every cell. The zebra is the 256×144 image copy stretched with `image-rendering: pixelated`, so its stripes are chunky on purpose and crawl one step per refresh. Guides are 1px ink lines with a 1px dark contour on both sides, at the thirds, and a 9px centre cross. Both show only in Image mode.
+
+### Event Marks
+Above the frame graph, outside the box: a 1×3 tick for a shader compile, the same tick with a 2×2 flag for an event marked by the app. Ink only; they never change colour.
+
 ### Distribution Bar
 One segment per level, 132×14 horizontal or 14px wide vertical, with a 1px ink border and contour, and segments separated by 2px of contour colour. The fills are monochrome patterns, in order: solid, hatched (135°), dotted, outline. With an RGB histogram on screen, the first three take the channel colours so bar and histogram read together.
 

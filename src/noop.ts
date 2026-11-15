@@ -3,13 +3,16 @@
  * It never touches the renderer, the DOM tree or the frame.
  */
 
-import { PROFILE_BUDGETS, type Budgets, type DeviceProfile } from './budgets.js';
+import type { Budgets, DeviceProfile } from './budgets.js';
 import type { ActiveFinding } from './diagnostics.js';
 import type { Pressure } from './pressure.js';
 import type { StatsReport } from './recorder.js';
 import type { StatsSnapshot } from './snapshot.js';
 import type { Stats as RealStats } from './stats.js';
 import type { StatsMode } from './types.js';
+
+/** The desktop profile, copied so this file shares no code with the overlay. */
+const BUDGETS: Readonly<Budgets> = { calls: 1000, triangles: 3_000_000, pixelRatio: 2, textureMB: 512, lights: 8, shadowLights: 3, shadowMapSize: 4096 };
 
 /** Every public member of the real class must exist here: a member added there fails this at compile time. */
 type PublicKeys = Record<keyof RealStats, unknown>;
@@ -22,7 +25,7 @@ class NoopStats implements PublicKeys {
 
   public get modes(): readonly { id: StatsMode; name: string; code: string; description: string }[] { return []; }
   public get profile(): DeviceProfile { return 'desktop'; }
-  public get budgets(): Readonly<Budgets> { return PROFILE_BUDGETS.desktop; }
+  public get budgets(): Readonly<Budgets> { return BUDGETS; }
   public get pressure(): Pressure { return 'ok'; }
   public get recording(): boolean { return false; }
   public get report(): StatsReport | null { return null; }
@@ -51,7 +54,7 @@ class NoopStats implements PublicKeys {
 
   public snapshot(): StatsSnapshot {
     return {
-      version: 1, mode: 'off', backend: 'webgl', profile: 'desktop', budget: 1000 / 60, budgets: { ...PROFILE_BUDGETS.desktop },
+      version: 1, mode: 'off', backend: 'webgl', profile: 'desktop', budget: 1000 / 60, budgets: { ...BUDGETS },
       frame: { fps: null, cpu: null, gpu: null, heap: null }, pacing: null,
       counters: { calls: 0, triangles: 0, points: 0, lines: 0, geometries: 0, textures: 0, programs: null, passes: null },
       canvas: { width: 0, height: 0, cssWidth: 0, cssHeight: 0, pixelRatio: null },

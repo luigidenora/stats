@@ -132,6 +132,31 @@ The context passed to `check` holds the frame values (`fps`, `cpu`, `gpu`, `p95`
 rules. Values a backend cannot measure are `null`. Turn built-in rules off with
 `new Stats(renderer, { rules: ['small-draws'] })`, or all of them with `rules: false`.
 
+## Events, recordings and the snapshot
+
+```ts
+stats.event('wave-start');            // a flag on the graphs, and a named entry in the recording
+stats.startRecording();
+const report = stats.stopRecording(); // or the REC plate; onReport receives every report
+const snapshot = stats.snapshot();    // everything as JSON (see agents.md)
+```
+
+A rule you add shows up in all three places: on the TIP plate, in `snapshot.findings` and in
+`report.findings`.
+
+## Controls from code, and helpers in the scene
+
+- `stats.setControl(id, active)` sets a toggle plate as a click would; `stats.removeControl(id)`
+  removes it.
+- An object with `userData.statsIgnore = true` is left out of the scene survey, with its
+  children. Flag gizmos and helpers your plugin adds to the scene, so they do not raise tips.
+
+## Plugins in production
+
+Type a plugin against `@three.ez/stats/dev` when it should vanish with the overlay: in a
+production build every call (`defineMode`, `addMetric`, `addRule`…) lands on a no-op. Keep heavy
+plugin code behind a dynamic `import()` so it is not bundled either.
+
 ## Rules the overlay enforces
 
 | Rule | What happens otherwise |
