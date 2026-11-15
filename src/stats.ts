@@ -228,6 +228,27 @@ export class Stats {
     const extra = options.metrics ?? [];
     for (let i = 0, l = extra.length; i < l; i++) this._overlay.addMetric(extra[i]);
     if (!exclude.includes('rec')) this._overlay.addControl(this.recControl());
+    if (!exclude.includes('zebra')) {
+      this._overlay.addControl({
+        id: 'zebra', label: 'ZEBRA', modes: ['image'],
+        description: 'Stripes over clipped highlights (a channel at 250 or more of 255), drawn on the canvas.',
+        onChange: (on) => {
+          this._overlay.setZebra(on);
+        }
+      });
+    }
+
+    if (!exclude.includes('grid')) {
+      this._overlay.addControl({
+        id: 'grid', label: 'GRID', modes: ['image'],
+        description: 'Framing guides over the canvas: rule-of-thirds lines and a centre mark.',
+        onChange: (on) => {
+          this._overlay.setGuides(on);
+        }
+      });
+    }
+
+    if (!exclude.includes('pixel')) this._overlay.addMetric(pixelMetric(() => this._overlay.pixelAt()));
 
     document.body.appendChild(this._overlay.root);
     this._resizeObserver = new ResizeObserver(this._onLayout);
@@ -338,7 +359,8 @@ export class Stats {
    */
   public event(name: string): this {
     this._overlay.markEvent();
-    this._recorder?.event(typeof name === 'string' ? name : String(name as unknown));
+    const text: unknown = name;
+    this._recorder?.event(typeof text === 'string' ? text : String(text));
     return this;
   }
 
@@ -782,6 +804,24 @@ function pacingMetrics(budget: number, pacing: () => FramePacing | null): StatsM
       }
     }
   ];
+}
+
+/** Image mode: the rendered colour under the pointer, as hex. */
+function pixelMetric(read: () => number | null): StatsMetric {
+  const channel = (value: number | null, shift: number): string => (value === null ? '—' : String((value >> shift) & 255));
+  return {
+    id: 'pixel', label: 'Colour of the rendered pixel under the pointer.', place: 'top', plate: 'PIX', width: 7, modes: ['image'],
+    read, format: (value) => `#${value.toString(16).padStart(6, '0').toUpperCase()}`,
+    tip: {
+      title: 'Pixel under the pointer',
+      text: 'The displayed colour, after tone mapping and encoding, from the 256×144 copy of the canvas the scopes share.',
+      values: () => {
+        const value = read();
+        const luma = value === null ? '—' : String(Math.round(0.2126 * ((value >> 16) & 255) + 0.7152 * ((value >> 8) & 255) + 0.0722 * (value & 255)));
+        return [['R', channel(value, 16)], ['G', channel(value, 8)], ['B', channel(value, 0)], ['Luma', luma]];
+      }
+    }
+  };
 }
 
 /** A row for one stats.mark() segment. */

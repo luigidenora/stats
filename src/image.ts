@@ -11,8 +11,14 @@
  * column, like a video waveform monitor, for the INFO image page.
  */
 
-const WIDTH = 256;
-const HEIGHT = 144;
+export const IMAGE_WIDTH = 256;
+export const IMAGE_HEIGHT = 144;
+const WIDTH = IMAGE_WIDTH;
+const HEIGHT = IMAGE_HEIGHT;
+/** Vectorscope size: chroma bins per side (Cb on x, Cr on y). */
+export const SCOPE_SIZE = 64;
+/** Captures closer than this are the same refresh: several panels share one copy. */
+const SAME_REFRESH_MS = 100;
 export const IMAGE_BINS = 256;
 /** Waveform size: image columns (x) × luma levels (y). */
 export const WAVE_COLUMNS = 128;
@@ -29,6 +35,16 @@ export class ImageSampler {
   public clippedHigh = 0;
   public clippedLow = 0;
   public valid = false;
+  /** Pixel count per chroma bin, row-major: index = y * SCOPE_SIZE + x; Cb grows right, Cr grows up. */
+  public readonly scope = new Float32Array(SCOPE_SIZE * SCOPE_SIZE);
+  /** Mean saturation (chroma distance from grey), 0–1. */
+  public saturation = 0;
+  /** Lowest and highest luma present, 0–255. */
+  public lumaMin = 0;
+  public lumaMax = 0;
+  /** RGBA of the last copy (IMAGE_WIDTH × IMAGE_HEIGHT), or null before the first capture. */
+  public pixels: Uint8ClampedArray | null = null;
+  private _capturedAt = -Infinity;
 
   private readonly _canvas: HTMLCanvasElement;
   private readonly _ctx: CanvasRenderingContext2D | null;
@@ -44,11 +60,16 @@ export class ImageSampler {
   public capture(source: HTMLCanvasElement): boolean {
     const ctx = this._ctx;
     if (ctx === null || source.width === 0 || source.height === 0) return false;
+    const now = performance.now();
+    if (now - this._capturedAt < SAME_REFRESH_MS) return this.valid;
+    this._capturedAt = now;
     try {
       // drawImage composites: without a clear, transparent areas would keep earlier frames.
       ctx.clearRect(0, 0, WIDTH, HEIGHT);
       ctx.drawImage(source, 0, 0, WIDTH, HEIGHT);
-      this.bin(ctx.getImageData(0, 0, WIDTH, HEIGHT).data);
+      const data = ctx.getImageData(0, 0, WIDTH, HEIGHT).data;
+      this.bin(data);
+      this.pixels = data;
       this.valid = true;
     } catch {
       this.valid = false;
@@ -63,6 +84,10 @@ export class ImageSampler {
     this.blue.fill(0);
     this.luma.fill(0);
     this.wave.fill(0);
+    this.scope.fill(0);
+    let chroma = 0;
+    let lumaMin = 255;
+    let lumaMax = 0;
     let high = 0;
     let low = 0;
     const shift = Math.log2(256 / IMAGE_BINS);
@@ -83,10 +108,23 @@ export class ImageSampler {
       this.luma[y >> shift]++;
       const column = Math.floor(((i >> 2) % WIDTH) / waveX);
       this.wave[column * WAVE_LEVELS + (y >> waveShift)]++;
+      if (y < lumaMin) lumaMin = y;
+      if (y > lumaMax) lumaMax = y;
+      // Rec. 709 colour difference, each within ±127.5.
+      const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      const cb = (b - luma) / 1.8556;
+      const cr = (r - luma) / 1.5748;
+      chroma += Math.sqrt(cb * cb + cr * cr);
+      const sx = Math.min(SCOPE_SIZE - 1, Math.max(0, Math.floor((cb / 255 + 0.5) * SCOPE_SIZE)));
+      const sy = Math.min(SCOPE_SIZE - 1, Math.max(0, Math.floor((0.5 - cr / 255) * SCOPE_SIZE)));
+      this.scope[sy * SCOPE_SIZE + sx]++;
       if (r === 255 || g === 255 || b === 255) high++;
       else if (r === 0 && g === 0 && b === 0) low++;
     }
 
+    this.saturation = pixels > 0 ? chroma / pixels / 127.5 : 0;
+    this.lumaMin = pixels > 0 ? lumaMin : 0;
+    this.lumaMax = lumaMax;
     this.clippedHigh = pixels > 0 ? high / pixels : 0;
     this.clippedLow = pixels > 0 ? low / pixels : 0;
   }

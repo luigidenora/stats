@@ -329,6 +329,22 @@ const CSS = `
 .tez-off .tez-c:not(.tez-c-backend), .tez-off .tez-c-backend > :not(.tez-disp) { visibility: hidden; }
 /* Leaving elements: a still copy that slides out; never interactive. */
 .tez-ghost, .tez-ghost * { pointer-events: none !important; }
+/* Image mode aids over the canvas. The zebra is the 256×144 image copy stretched: chunky stripes on purpose. */
+/* z-index -1: positioned, yet under the in-flow cells (the fixed root is their stacking context). */
+.tez-zebra, .tez-guides { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
+.tez-zebra { image-rendering: pixelated; }
+/* Guides: 1px ink lines with the dark contour on both sides. */
+.tez-guide { position: absolute; background: var(--tez-ink); box-shadow: 0 0 0 1px var(--tez-contour, rgb(0 0 0 / 0.85)); opacity: 0.8; }
+.tez-guide-0, .tez-guide-1 { top: 0; bottom: 0; width: 1px; }
+.tez-guide-0 { left: 33.333%; }
+.tez-guide-1 { left: 66.667%; }
+.tez-guide-2, .tez-guide-3 { left: 0; right: 0; height: 1px; }
+.tez-guide-2 { top: 33.333%; }
+.tez-guide-3 { top: 66.667%; }
+/* Centre mark: a 9px cross. */
+.tez-guide-4 { left: calc(50% - 4px); top: 50%; width: 9px; height: 1px; }
+.tez-guide-4::after { content: ''; position: absolute; left: 4px; top: -4px; width: 1px; height: 9px; background: var(--tez-ink); box-shadow: 0 0 0 1px var(--tez-contour, rgb(0 0 0 / 0.85)); }
+.tez-scope { align-items: end; }
 .tez-disp-off { opacity: 0.55; }
 .tez-stacked {
   grid-template-columns: minmax(0, 1fr) auto;

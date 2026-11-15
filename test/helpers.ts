@@ -79,6 +79,7 @@ export function stubCanvas2d(): () => void {
         get: (target, key) => {
           if (key in target) return target[key];
           if (key === 'measureText') return () => ({ width: 0 });
+          if (key === 'createImageData') return (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) });
           if (key === 'getImageData') return (_x: number, _y: number, w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) });
           return () => undefined;
         },

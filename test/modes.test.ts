@@ -198,6 +198,30 @@ describe('modes', () => {
     }).not.toThrow();
   });
 
+  it('shows the image aids only in Image mode: scopes, ZEBRA, GRID and the pixel row', () => {
+    const stats = setup({ mode: 'image' });
+    run(stats, 0.5);
+    const button = (label: string): HTMLButtonElement => must(Array.from(stats.element.querySelectorAll('button')).find((entry) => entry.textContent === label), label);
+    const zebra = q(stats, '.tez-zebra');
+    const guides = q(stats, '.tez-guides');
+    expect(zebra.hidden).toBe(true);
+    button('ZEBRA').click();
+    button('GRID').click();
+    expect(zebra.hidden).toBe(false);
+    expect(guides.hidden).toBe(false);
+    expect(q(stats, '[data-tip^="Pixel under the pointer"]').hidden).toBe(false);
+    expect(() => {
+      run(stats, 0.5);
+    }).not.toThrow();
+    stats.mode = 'simple';
+    expect(zebra.hidden).toBe(true);
+    expect(guides.hidden).toBe(true);
+    expect(button('ZEBRA').hidden).toBe(true);
+    expect(q(stats, '[data-tip^="Pixel under the pointer"]').hidden).toBe(true);
+    stats.mode = 'image';
+    expect(zebra.hidden).toBe(false);
+  });
+
   it('extends a built-in mode', () => {
     const stats = setup({ mode: 'performance' });
     stats.extendMode('performance', { metrics: [{ id: 'bodies', label: 'Bodies', place: 'top', plate: 'BODY', read: () => 7 }] });

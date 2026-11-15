@@ -58,10 +58,11 @@ function record(map: Map<string, number>): Record<string, number> {
 
 /** The survey without its per-mesh arrays, with Maps as plain objects. */
 export function summariseScene(survey: SceneSurvey): SceneSummary {
-  const summary: SceneSummary & { trianglesPerMesh?: number[]; textureSides?: number[] } = {
+  const summary: SceneSummary & { trianglesPerMesh?: number[] | undefined; textureSides?: number[] | undefined } = {
     ...survey, lightsByType: record(survey.lightsByType), materialsByType: record(survey.materialsByType)
   };
-  delete summary.trianglesPerMesh;
-  delete summary.textureSides;
+  // Per-mesh and per-texture arrays are for the histograms, too long for a summary (undefined is left out of JSON).
+  summary.trianglesPerMesh = undefined;
+  summary.textureSides = undefined;
   return summary;
 }

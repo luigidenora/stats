@@ -2,7 +2,8 @@ import { checkControl, Toggle } from './controls.js';
 import { checkDistribution, checkGraph, checkHistogram, checkMetric, safeFormat, customGraphPanel, distributionPanel, finite, graphPanel, safeRead, warnOnce, type Panel } from './custom.js';
 import type { ActiveFinding } from './diagnostics.js';
 import { HISTOGRAM_WIDTH, histogramPanel, imageHistogramPanel, type HistogramPanel } from './histogram-panel.js';
-import { ImageSampler } from './image.js';
+import { vectorscopePanel, waveformPanel, zebraMask } from './scopes.js';
+import { IMAGE_HEIGHT, IMAGE_WIDTH, ImageSampler } from './image.js';
 import type { InfoPage } from './info.js';
 import { InfoPanel } from './info-panel.js';
 import { el, graphColors, hit, num, stack, TimeReadout, write, type Writable } from './dom.js';
@@ -103,6 +104,23 @@ export class Overlay {
   private readonly _imageSampler = new ImageSampler();
   private _imageSource: HTMLCanvasElement | null = null;
   private _imagePanel: HistogramPanel | null = null;
+  /** Image mode aids drawn over the canvas: zebra stripes on clipped highlights, framing guides. */
+  private readonly _zebra = el('canvas', 'tez-zebra');
+  private readonly _guides = el('div', 'tez-guides');
+  private _zebraOn = false;
+  private _guidesOn = false;
+  private _zebraPhase = 0;
+  private _zebraImage: ImageData | null = null;
+  /** Last pointer position in client px, for the pixel readout; null when it left the page. */
+  private _pointer: { x: number; y: number } | null = null;
+  private readonly onPointerMove = (event: PointerEvent): void => {
+    this._pointer = { x: event.clientX, y: event.clientY };
+  };
+
+  private readonly onPointerLeave = (): void => {
+    this._pointer = null;
+  };
+
   /** INFO mode: the shrunk canvas shows through this cell; the page sits on the right. */
   private readonly _thumb = el('div', 'tez-c tez-c-thumb');
   private readonly _pages = el('div', 'tez-c tez-c-pages');
@@ -172,7 +190,8 @@ export class Overlay {
     });
     this._panels = this.buildPanels();
     // Built-in Image mode: the shared histogram of the rendered image.
-    this._content.set('image', { graphs: [], distribution: null, histogram: 'image' });
+    const capture = (): boolean => this._imageSource !== null && this._imageSampler.capture(this._imageSource);
+    this._content.set('image', { graphs: [waveformPanel(this._imageSampler, capture), vectorscopePanel(this._imageSampler, capture)], distribution: null, histogram: 'image' });
     this._content.set('info', { graphs: [], distribution: null, histogram: 'image' });
     this._onLayout = options.onLayout;
     this._control = interactive
@@ -188,9 +207,47 @@ export class Overlay {
     if (this._control !== null) this._plates.append(this._control.element);
     this._counters.append(this._grid);
     // The thumbnail comes first: its backdrop shadow must paint under every other cell.
-    this.root.append(this._thumb, this._pages, this._band, this._rows, this._hist, this._side, this._counters, this._strip, this._plates);
+    this._zebra.width = IMAGE_WIDTH;
+    this._zebra.height = IMAGE_HEIGHT;
+    this._zebra.setAttribute('aria-hidden', 'true');
+    this._guides.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < 5; i++) this._guides.append(el('span', `tez-guide tez-guide-${i}`));
+    window.addEventListener('pointermove', this.onPointerMove, { passive: true });
+    document.documentElement.addEventListener('pointerleave', this.onPointerLeave);
+    // Under every cell: the aids belong to the picture, the readouts stay on top.
+    this.root.append(this._zebra, this._guides, this._thumb, this._pages, this._band, this._rows, this._hist, this._side, this._counters, this._strip, this._plates);
     this._tooltip = new Tooltip(this.root);
     this.applyMode();
+  }
+
+  /** Image mode: stripes over clipped highlights (see scopes.ts). */
+  public setZebra(on: boolean): void {
+    this._zebraOn = on;
+    this.applyMode();
+    this.drawZebra();
+  }
+
+  /** Image mode: rule-of-thirds lines and a centre mark over the canvas. */
+  public setGuides(on: boolean): void {
+    this._guidesOn = on;
+    this.applyMode();
+  }
+
+  /**
+   * Colour of the rendered pixel under the pointer as 0xRRGGBB, from the image copy of the last
+   * refresh; null outside Image mode, off the canvas or before the first copy.
+   */
+  public pixelAt(): number | null {
+    const pixels = this._imageSampler.pixels;
+    const pointer = this._pointer;
+    if (this._mode !== 'image' || pixels === null || pointer === null || !this._imageSampler.valid) return null;
+    const box = this.root.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) return null;
+    const u = (pointer.x - box.left) / box.width;
+    const v = (pointer.y - box.top) / box.height;
+    if (u < 0 || u >= 1 || v < 0 || v >= 1) return null;
+    const at = (Math.floor(v * IMAGE_HEIGHT) * IMAGE_WIDTH + Math.floor(u * IMAGE_WIDTH)) * 4;
+    return (pixels[at] << 16) | (pixels[at + 1] << 8) | pixels[at + 2];
   }
 
   public get mode(): StatsMode { return this._mode; }
@@ -409,6 +466,7 @@ export class Overlay {
     }
 
     if (this._mode === 'memory') this._panels.heap.draw(colors);
+    this.drawZebra();
     if (this._mode === 'info') this._info?.update();
   }
 
@@ -510,6 +568,8 @@ export class Overlay {
     this._control?.dispose();
     for (let i = 0, l = this._toggles.length; i < l; i++) this._toggles[i].dispose();
     this._tooltip.dispose();
+    window.removeEventListener('pointermove', this.onPointerMove);
+    document.documentElement.removeEventListener('pointerleave', this.onPointerLeave);
     this.root.remove();
   }
 
@@ -518,8 +578,21 @@ export class Overlay {
     if (read !== undefined) samples.push(read());
   }
 
+  /** Repaints the zebra stripes from the last image copy; they crawl one step per refresh. */
+  private drawZebra(): void {
+    if (this._zebra.hidden === true) return;
+    const pixels = this._imageSampler.pixels;
+    const ctx = this._zebra.getContext('2d');
+    if (ctx === null || pixels === null || !this._imageSampler.valid) return;
+    this._zebraImage ??= ctx.createImageData(IMAGE_WIDTH, IMAGE_HEIGHT);
+    zebraMask(pixels, this._zebraImage.data, this._zebraPhase++);
+    ctx.putImageData(this._zebraImage, 0, 0);
+  }
+
   private applyMode(): void {
     this.root.classList.toggle('tez-off', this._mode === 'off');
+    this._zebra.hidden = !(this._zebraOn && this._mode === 'image');
+    this._guides.hidden = !(this._guidesOn && this._mode === 'image');
     this._tips.hidden = this._mode === 'off' || this._findings === 0;
     this.root.classList.toggle('tez-info', this._mode === 'info');
     this.root.dataset['mode'] = this._mode;
