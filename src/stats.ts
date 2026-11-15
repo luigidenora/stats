@@ -509,6 +509,18 @@ export class Stats {
     return this;
   }
 
+  /** Sets a toggle plate from code; its onChange runs as on a click. */
+  public setControl(id: string, active: boolean): this {
+    this._overlay.setControl(id, active);
+    return this;
+  }
+
+  /** Removes a toggle plate added with addControl(). */
+  public removeControl(id: string): this {
+    this._overlay.removeControl(id);
+    return this;
+  }
+
   public removeMetric(id: string): this {
     this._overlay.removeMetric(id);
     return this;

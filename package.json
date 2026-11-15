@@ -1,7 +1,7 @@
 {
   "name": "@three.ez/stats",
   "version": "1.0.0",
-  "description": "Read-only statistics overlay for three.js: frame timing, renderer counters, memory and GPU time.",
+  "description": "Statistics overlay for three.js, WebGL and WebGPU: frame timing, GPU time, renderer counters, memory, image scopes, diagnostics with advice, session reports and tools for agents.",
   "author": "Luigi Denora (https://github.com/luigidenora)",
   "license": "MIT",
   "type": "module",
@@ -11,6 +11,19 @@
     ".": {
       "types": "./build/types/index.d.ts",
       "import": "./build/index.js"
+    },
+    "./dev": {
+      "types": "./build/types/dev.d.ts",
+      "production": "./build/noop.js",
+      "default": "./build/dev.js"
+    },
+    "./agent": {
+      "types": "./build/types/agent.d.ts",
+      "import": "./build/agent.js"
+    },
+    "./probe": {
+      "types": "./build/types/probe.d.ts",
+      "import": "./build/probe.js"
     },
     "./package.json": "./package.json"
   },
@@ -38,7 +51,13 @@
     "profiling",
     "overlay",
     "webgl",
-    "webgpu"
+    "webgpu",
+    "fps",
+    "diagnostics",
+    "histogram",
+    "vectorscope",
+    "mcp",
+    "agent"
   ],
   "homepage": "https://github.com/luigidenora/stats#readme",
   "repository": {

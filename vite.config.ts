@@ -2,7 +2,7 @@
 import { defineConfig } from 'vite';
 
 /**
- * Library build: one ES module at build/index.js (types come from tsc). The dev server keeps the
+ * Library build: one ES module per entry in build/ (types come from tsc). The dev server keeps the
  * project root, so the examples stay at /examples/index.html and /examples/showcase.html.
  */
 export default defineConfig({
@@ -11,9 +11,10 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: true,
     lib: {
-      entry: 'src/index.ts',
+      // One file per public entry (see "exports" in package.json); shared code goes into chunks.
+      entry: { index: 'src/index.ts', dev: 'src/dev.ts', noop: 'src/noop.ts', agent: 'src/agent.ts', probe: 'src/probe.ts' },
       formats: ['es'],
-      fileName: () => 'index.js'
+      fileName: (_format, name) => `${name}.js`
     },
     rolldownOptions: {
       external: [/^three(\/.*)?$/]

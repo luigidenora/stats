@@ -388,6 +388,17 @@ export class Overlay {
     return true;
   }
 
+  /** Removes a toggle plate added with addControl(). */
+  public removeControl(id: string): void {
+    for (let i = 0, l = this._toggles.length; i < l; i++) {
+      if (this._toggles[i].definition.id !== id) continue;
+      this._toggles[i].dispose();
+      this._toggles.splice(i, 1);
+      if (this.root.isConnected) this.layout();
+      return;
+    }
+  }
+
   /** Shows the TIP plate with the active diagnostics, or hides it when there are none. */
   public setFindings(findings: readonly ActiveFinding[]): void {
     const before = this._findings;
