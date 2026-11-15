@@ -14,7 +14,7 @@ export function makeContext(overrides: Partial<DiagnosticContext> = {}): Diagnos
     fps: 60, cpu: 4, gpu: 5, p95: 17, dropped: 0, jitter: 0.5, blocking: 0,
     calls: 100, triangles: 100_000, lines: 0, points: 0, passes: 1, programs: 4, recentPrograms: 0,
     geometryGrowth: 0, textureGrowth: 0, gcRate: 0, pixelRatio: 1,
-    bufferPixels: 1920 * 1080, displayPixels: 1920 * 1080, contextLost: 0, shadowMapEnabled: true, scene: null,
+    bufferPixels: 1920 * 1080, displayPixels: 1920 * 1080, contextLost: 0, camera: null, robustDepth: false, shadowMapEnabled: true, scene: null,
     ...overrides
   };
 }

@@ -364,7 +364,12 @@ export class TimeGraph {
     const events = this._options.events;
     if (events !== undefined && !vertical) {
       for (let i = 0, l = Math.min(this.span, events.count); i < l; i++) {
-        if (events.recent(i) > 0) rects.push(PAD + this.span - i, PAD - TICK - 1, 1, TICK);
+        const kind = events.recent(i);
+        if (kind <= 0) continue;
+        const x = PAD + this.span - i;
+        rects.push(x, PAD - TICK - 1, 1, TICK);
+        // 2 or more: a named event (stats.event()), drawn as a flag on the tick.
+        if (kind >= 2) rects.push(x + 1, PAD - TICK - 1, 2, 2);
       }
     }
 

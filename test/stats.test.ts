@@ -353,3 +353,124 @@ describe('Stats custom content', () => {
     }).not.toThrow();
   });
 });
+
+describe('Stats recording, events and pressure', () => {
+  it('records between start and stop and reports the run', () => {
+    const onReport = vi.fn();
+    const { stats, renderer } = setup({ onReport });
+    expect(stats.stopRecording()).toBeNull();
+    run(stats, 0.5);
+    stats.startRecording();
+    expect(stats.recording).toBe(true);
+    run(stats, 1);
+    stats.event('boss');
+    run(stats, 1, () => {
+      renderer.info.render.calls = 40;
+      renderer.info.render.triangles = 40_000;
+    });
+    const report = must(stats.stopRecording());
+    expect(stats.recording).toBe(false);
+    expect(report.frames).toBe(120);
+    expect(report.fps.average).toBeCloseTo(60, 0);
+    expect(report.fps.low1).toBeCloseTo(60, 0);
+    expect(report.calls.max).toBe(40);
+    expect(report.events).toHaveLength(1);
+    expect(report.events[0].name).toBe('boss');
+    expect(report.events[0].at).toBeCloseTo(1, 1);
+    expect(report.backend).toBe('webgl');
+    expect(stats.report).toBe(report);
+    expect(onReport).toHaveBeenCalledWith(report);
+  });
+
+  it('records from the REC plate too, and shows the plate on while recording from code', () => {
+    const { stats } = setup({ mode: 'performance' });
+    const rec = must(Array.from(stats.element.querySelectorAll('button')).find((button) => button.textContent === 'REC'));
+    rec.click();
+    expect(stats.recording).toBe(true);
+    run(stats, 0.5);
+    rec.click();
+    expect(stats.recording).toBe(false);
+    expect(stats.report?.frames).toBeGreaterThan(20);
+    stats.startRecording();
+    expect(rec.getAttribute('aria-pressed')).toBe('true');
+    stats.stopRecording();
+    expect(rec.getAttribute('aria-pressed')).toBe('false');
+    expect(setup({ exclude: ['rec'] }).stats.element.textContent).not.toContain('REC');
+  });
+
+  it('keeps a hidden-tab gap out of a recording', () => {
+    const { stats } = setup();
+    stats.startRecording();
+    run(stats, 1);
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    now += 8000;
+    run(stats, 1);
+    const report = must(stats.stopRecording());
+    expect(report.duration).toBeLessThan(2.1);
+    expect(report.frame.worst).toBeLessThan(20);
+  });
+
+  it('signals pressure for adaptive quality, and survives a callback that throws', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const seen: string[] = [];
+    const { stats } = setup({ onPressure: (pressure) => {
+      seen.push(pressure);
+      throw new Error('boom');
+    } });
+    // 14 ms of CPU on a 16.7 ms budget at 30 fps: no room left.
+    for (let i = 0; i < 150; i++) {
+      stats.begin();
+      now += 14;
+      stats.end();
+      now += 1000 / 30 - 14;
+    }
+
+    expect(seen[0]).toBe('high');
+    expect(seen.length).toBeGreaterThanOrEqual(2);
+    expect(stats.pressure).toBe('high');
+  });
+});
+
+describe('Stats snapshot for agents and tools', () => {
+  it('is plain JSON with the measurements, the findings and their advice', () => {
+    const lights: { type: string; isLight: boolean }[] = [];
+    for (let i = 0; i < 12; i++) lights.push({ type: 'PointLight', isLight: true });
+    const scene: InfoScene = { traverse: (callback) => {
+      for (const light of lights) callback(light);
+    } };
+    const camera = { type: 'PerspectiveCamera', isPerspectiveCamera: true, fov: 50, near: 0.001, far: 5000, position: { x: 1, y: 2, z: 3 } };
+    const { stats, renderer } = setup({ scene, camera });
+    run(stats, 2.5, () => {
+      renderer.info.render.calls = 12;
+      renderer.info.render.triangles = 12_000;
+    });
+    const snapshot = stats.snapshot();
+    const json = JSON.parse(JSON.stringify(snapshot)) as typeof snapshot;
+    expect(json).toEqual(snapshot);
+    expect(json.version).toBe(1);
+    expect(json.frame.fps).toBeCloseTo(60, 0);
+    expect(json.pacing?.dropped).toBe(0);
+    expect(json.counters.calls).toBe(12);
+    expect(json.scene?.lights).toBe(12);
+    expect(json.scene?.lightsByType).toEqual({ PointLight: 12 });
+    expect(json.camera).toEqual({ type: 'PerspectiveCamera', fov: 50, near: 0.001, far: 5000, position: [1, 2, 3] });
+    const ids = json.findings.map((finding) => finding.id);
+    expect(ids).toContain('lights');
+    expect(ids).toContain('depth-precision');
+    expect(json.findings.every((finding) => finding.message !== '' && finding.advice !== '')).toBe(true);
+    expect(json.checks.find((check) => check.id === 'lights')?.status).toBe('warn');
+  });
+
+  it('lists live instances in a global array, unless told not to', () => {
+    const hook = (globalThis as unknown as Record<string, Stats[]>)['__THREE_EZ_STATS__'];
+    const before = hook.length;
+    const { stats } = setup();
+    expect(hook).toContain(stats);
+    expect(setup({ expose: false }).stats).toBeDefined();
+    expect(hook).toHaveLength(before + 1);
+    must(open.splice(open.indexOf(stats), 1)[0]).dispose();
+    expect(hook).not.toContain(stats);
+  });
+});

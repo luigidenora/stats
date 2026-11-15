@@ -143,6 +143,13 @@ export const FRAME_RULES: readonly DiagnosticRule[] = [
     }
   },
   {
+    id: 'depth-precision',
+    title: 'Depth range too wide',
+    check: ({ camera, robustDepth }) => (camera !== null && camera.perspective && !robustDepth && camera.near > 0 && camera.far / camera.near > 100_000
+      ? { message: `Far / near is ${formatCount(camera.far / camera.near)} (near ${camera.near}, far ${camera.far}).`, advice: 'Distant surfaces will z-fight: raise near (it matters far more than far), or use a logarithmic or reversed depth buffer.' }
+      : null)
+  },
+  {
     id: 'context-lost',
     title: 'Context lost',
     check: ({ contextLost }) => (contextLost > 0

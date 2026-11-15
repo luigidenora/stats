@@ -133,6 +133,7 @@ const CSS = `
 .tez-tip-mark[data-mark='budget-tick'] { background: linear-gradient(var(--tez-ink), var(--tez-ink)) 8px 0 / 1px 8px no-repeat, linear-gradient(var(--tez-ink), var(--tez-ink)) 4px 4px / 3px 1px no-repeat; }
 /* Event tick: 1×3 above the top edge. */
 .tez-tip-mark[data-mark='event-tick'] { background: linear-gradient(var(--tez-ink), var(--tez-ink)) 0 5px / 12px 1px no-repeat, linear-gradient(var(--tez-ink), var(--tez-ink)) 6px 1px / 1px 3px no-repeat; }
+.tez-tip-mark[data-mark='flag-tick'] { background: linear-gradient(var(--tez-ink), var(--tez-ink)) 0 5px / 12px 1px no-repeat, linear-gradient(var(--tez-ink), var(--tez-ink)) 5px 1px / 1px 3px no-repeat, linear-gradient(var(--tez-ink), var(--tez-ink)) 6px 1px / 2px 2px no-repeat; }
 /* Criticality lane: the box bottom edge with yellow and red segments under it. */
 .tez-tip-mark[data-mark='lane'] { background: linear-gradient(var(--tez-ink), var(--tez-ink)) 0 2px / 12px 1px no-repeat, linear-gradient(var(--tez-alert), var(--tez-alert)) 2px 4px / 4px 2px no-repeat, linear-gradient(var(--tez-clip), var(--tez-clip)) 7px 4px / 3px 2px no-repeat; }
 /* The mode menu replaces the tooltip while it is open. */

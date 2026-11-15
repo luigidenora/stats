@@ -48,6 +48,10 @@ export interface DiagnosticContext {
   bufferPixels: number;
   displayPixels: number;
   contextLost: number;
+  /** The camera's depth range, or null without a `camera`. */
+  camera: { near: number; far: number; perspective: boolean } | null;
+  /** The renderer uses a logarithmic or reversed depth buffer: wide depth ranges are safe. */
+  robustDepth: boolean;
   /** `renderer.shadowMap.enabled`, or null when the renderer does not say. */
   shadowMapEnabled: boolean | null;
   scene: SceneSurvey | null;

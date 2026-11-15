@@ -149,6 +149,15 @@ describe('frame rules', () => {
     expect(fires('pixel-ratio', { bufferPixels: 1200, displayPixels: 0 })).toBe(false);
   });
 
+  it('depth-precision: a wide perspective depth range without a robust depth buffer', () => {
+    const camera = { near: 0.001, far: 5000, perspective: true };
+    expect(fires('depth-precision', { camera })).toBe(true);
+    expect(fires('depth-precision', { camera, robustDepth: true })).toBe(false);
+    expect(fires('depth-precision', { camera: { ...camera, perspective: false } })).toBe(false);
+    expect(fires('depth-precision', { camera: { near: 0.1, far: 1000, perspective: true } })).toBe(false);
+    expect(fires('depth-precision', { camera: null })).toBe(false);
+  });
+
   it('context-lost: any loss', () => {
     expect(fires('context-lost', { contextLost: 0 })).toBe(false);
     expect(fires('context-lost', { contextLost: 1 })).toBe(true);

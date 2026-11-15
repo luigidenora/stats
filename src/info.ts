@@ -7,6 +7,7 @@
  */
 
 import { PROFILE_BUDGETS, type Budgets } from './budgets.js';
+import { focalLength35, type InfoCamera } from './camera.js';
 import type { Diagnostics } from './diagnostics.js';
 import { formatBytes, formatCount } from './format.js';
 import type { BackendKind, StatsRenderer } from './sampler.js';
@@ -155,6 +156,27 @@ function scenePage(survey: SceneSurvey | null | undefined, budgets: Budgets): In
   };
 }
 
+function cameraPage(camera: InfoCamera | null | undefined): InfoPage {
+  if (camera === null || camera === undefined) return { title: 'Camera', rows: [{ key: 'Camera', value: NONE }, { key: 'Note', value: 'Pass { camera } to Stats' }] };
+  const perspective = camera.isPerspectiveCamera === true;
+  const ratio = camera.near > 0 ? camera.far / camera.near : null;
+  const fixed = (value: number): string => (Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(2));
+  return {
+    title: 'Camera',
+    rows: [
+      { key: 'Type', value: perspective ? 'Perspective' : camera.isOrthographicCamera === true ? 'Orthographic' : (camera.type ?? NONE) },
+      { key: 'Field of view', value: perspective && camera.fov !== undefined ? `${camera.fov.toFixed(1)}°` : NONE },
+      { key: 'Focal (35 mm eq.)', value: perspective && camera.fov !== undefined ? `${focalLength35(camera.fov).toFixed(0)} mm` : NONE },
+      { key: 'Aspect', value: camera.aspect === undefined ? NONE : camera.aspect.toFixed(2) },
+      { key: 'Zoom', value: camera.zoom === undefined ? NONE : camera.zoom.toFixed(2) },
+      { key: 'Near', value: String(camera.near) },
+      { key: 'Far', value: String(camera.far) },
+      { key: 'Far / near', value: ratio === null ? NONE : formatCount(ratio), warn: perspective && ratio !== null && ratio > 100_000 },
+      { key: 'Position', value: `${fixed(camera.position.x)}, ${fixed(camera.position.y)}, ${fixed(camera.position.z)}` }
+    ]
+  };
+}
+
 function diagnosticsPage(diagnostics: Diagnostics | null): InfoPage {
   if (diagnostics === null) return { title: 'Diagnostics', rows: [{ key: 'Checks', value: 'Off' }] };
   const report = diagnostics.report();
@@ -175,13 +197,14 @@ function diagnosticsPage(diagnostics: Diagnostics | null): InfoPage {
   return { title: 'Diagnostics', rows };
 }
 
-export const INFO_PAGES = 5;
+export const INFO_PAGES = 6;
 
 /** What the pages read besides the renderer. */
 export interface PageSources {
   /** The shared scene survey: undefined without a scene, null when the scene could not be read. */
   survey?: () => SceneSurvey | null | undefined;
   diagnostics?: Diagnostics | null;
+  camera?: () => InfoCamera | null;
   /** Limits for the yellow rows; the desktop profile by default. */
   budgets?: Budgets;
 }
@@ -194,6 +217,7 @@ export function buildPage(index: number, renderer: StatsRenderer, backend: Backe
     case 1: return limitsPage(renderer);
     case 2: return programsPage(renderer);
     case 3: return scenePage(sources.survey?.(), budgets);
+    case 4: return cameraPage(sources.camera?.());
     default: return diagnosticsPage(sources.diagnostics ?? null);
   }
 }

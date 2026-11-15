@@ -15,7 +15,7 @@ import type { GlyphName, GlyphSpec } from './glyphs.js';
  * Mark drawn before a legend row of a rich tooltip: a series or state colour, or one of the
  * graph symbols (the budget tick on the sides, the event tick on top, the criticality lane below).
  */
-export type TipMark = 'ink' | 'alert' | 'clip' | 'frame' | 'gpu' | 'cpu' | 'r' | 'g' | 'b' | 'budget-tick' | 'event-tick' | 'lane';
+export type TipMark = 'ink' | 'alert' | 'clip' | 'frame' | 'gpu' | 'cpu' | 'r' | 'g' | 'b' | 'budget-tick' | 'event-tick' | 'flag-tick' | 'lane';
 
 /**
  * Rich tooltip content: a title, a short text, a legend that explains colours and symbols, live

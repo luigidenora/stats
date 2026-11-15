@@ -111,10 +111,10 @@ describe('modes', () => {
     run(stats, 0.5);
     const title = q(stats, '.tez-info-title');
     expect(title.textContent).toBe('RENDERER');
-    expect(q(stats, '.tez-info-count').textContent).toBe('1/5');
+    expect(q(stats, '.tez-info-count').textContent).toBe('1/6');
     q(stats, '.tez-pager').click();
     expect(title.textContent).toBe('LIMITS');
-    expect(q(stats, '.tez-info-count').textContent).toBe('2/5');
+    expect(q(stats, '.tez-info-count').textContent).toBe('2/6');
   });
 
   it('adds a custom mode to the cycle before Off, with its graphs, metrics, distribution and controls', () => {

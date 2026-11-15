@@ -1,4 +1,5 @@
 import { resolveBudgets, type Budgets, type DeviceProfile } from './budgets.js';
+import type { InfoCamera } from './camera.js';
 import { CanvasFit } from './canvas-fit.js';
 import { warnOnce } from './custom.js';
 import { Diagnostics, type ActiveFinding, type DiagnosticContext, type DiagnosticRule } from './diagnostics.js';
@@ -9,6 +10,9 @@ import { buildPage, INFO_PAGES } from './info.js';
 import { FRAME_RULES, SCENE_RULES } from './rules.js';
 import { surveyScene, type InfoScene, type SceneSurvey } from './scene-survey.js';
 import { findMode, MODES } from './modes.js';
+import { PressureMonitor, type Pressure } from './pressure.js';
+import { Recorder, type MemoryCounters, type StatsReport } from './recorder.js';
+import { summariseScene, type StatsSnapshot } from './snapshot.js';
 import { Overlay, type FrameThresholds } from './overlay.js';
 import type { ControlDefinition, ModeContent, ModeDefinition, StatsMetric, StatsMode } from './types.js';
 import { FIRST_SEGMENT, FrameSampler, type StatsRenderer } from './sampler.js';
@@ -58,7 +62,30 @@ export interface StatsOptions {
   budgets?: Partial<Budgets>;
   /** Diagnostics: false turns them all off (no TIP plate), a list turns off those rule ids. Default: all on. */
   rules?: false | readonly string[];
+  /** Camera for the INFO Camera page and the depth precision check. Optional. */
+  camera?: InfoCamera;
+  /**
+   * Called when the frame runs out of room ('high') or has plenty ('low'), and again every 2 s
+   * while it stays so: the hook for adaptive quality. See `pressure`.
+   *
+   * ```ts
+   * onPressure: (pressure) => {
+   *   if (pressure === 'high') renderer.setPixelRatio(Math.max(1, renderer.getPixelRatio() - 0.25));
+   * }
+   * ```
+   */
+  onPressure?: (pressure: Pressure) => void;
+  /** Called with the report of every finished recording (the REC plate or `stopRecording()`). */
+  onReport?: (report: StatsReport) => void;
+  /**
+   * Lists this instance in `globalThis.__THREE_EZ_STATS__`, so tools and agents driving the page
+   * can call `__THREE_EZ_STATS__[0].snapshot()`. Default true.
+   */
+  expose?: boolean;
 }
+
+/** Name of the global array of live instances. */
+export const GLOBAL_HOOK = '__THREE_EZ_STATS__';
 
 /**
  * Statistics overlay for a three.js renderer.
@@ -107,6 +134,13 @@ export class Stats {
   private _holdRefresh = false;
   /** Duration of the last scene survey, in ms. */
   private _surveyCost = 0;
+  private _camera: InfoCamera | null;
+  private readonly _pressure = new PressureMonitor();
+  private readonly _onPressure: ((pressure: Pressure) => void) | null;
+  private readonly _onReport: ((report: StatsReport) => void) | null;
+  private _recorder: Recorder | null = null;
+  private _report: StatsReport | null = null;
+  private readonly _exposed: boolean;
   private _lastRefresh = 0;
   private _rectDirty = true;
   private readonly _onLayout = (): void => {
@@ -120,6 +154,7 @@ export class Stats {
     this._sampler.pause();
     this._pacing.reset();
     this._holdRefresh = true;
+    this._pressure.reset();
   };
 
   constructor(renderer: StatsRenderer, options: StatsOptions = {}) {
@@ -163,7 +198,8 @@ export class Stats {
     this._overlay.setInfoSource(INFO_PAGES, (index) => buildPage(index, renderer, this._sampler.backend, {
       survey: () => (this._scene === null ? undefined : this.survey(performance.now(), SURVEY_FRESH_MS)),
       diagnostics: this._diagnostics,
-      budgets: this._budgets
+      budgets: this._budgets,
+      camera: () => this._camera
     }));
     // The Mesh and Memory graphs read the renderer, not the counter rows (which `exclude` may drop).
     this._overlay.setCounters({
@@ -172,7 +208,12 @@ export class Stats {
     });
     this._sampler.onGpuSample = (ms): void => {
       this._overlay.pushGpu(ms);
+      this._recorder?.gpu(ms);
     };
+
+    this._camera = options.camera ?? null;
+    this._onPressure = options.onPressure ?? null;
+    this._onReport = options.onReport ?? null;
 
     this._sampler.onSegment = (name): void => {
       this._overlay.addMetric(segmentMetric(name, () => this._sampler.segment(name)));
@@ -186,6 +227,7 @@ export class Stats {
 
     const extra = options.metrics ?? [];
     for (let i = 0, l = extra.length; i < l; i++) this._overlay.addMetric(extra[i]);
+    if (!exclude.includes('rec')) this._overlay.addControl(this.recControl());
 
     document.body.appendChild(this._overlay.root);
     this._resizeObserver = new ResizeObserver(this._onLayout);
@@ -194,6 +236,8 @@ export class Stats {
     window.addEventListener('scroll', this._onLayout, { passive: true, capture: true });
     document.addEventListener('visibilitychange', this._onVisibility);
     this.syncRect();
+    this._exposed = options.expose ?? true;
+    if (this._exposed) liveInstances().push(this);
   }
 
   /** Current display mode. Setting it from code does not change the remembered choice. */
@@ -250,6 +294,92 @@ export class Stats {
   /** Budgets in use: the profile's, with the `budgets` option applied. */
   public get budgets(): Readonly<Budgets> { return this._budgets; }
 
+  /** Current pressure on the frame: 'high' (no room left), 'low' (plenty) or 'ok'. See the `onPressure` option. */
+  public get pressure(): Pressure { return this._pressure.level; }
+
+  /** True between `startRecording()` and `stopRecording()`. */
+  public get recording(): boolean { return this._recorder !== null; }
+
+  /** The report of the last finished recording, or null. */
+  public get report(): StatsReport | null { return this._report; }
+
+  /**
+   * Starts recording every frame for a report: averages, percentiles, the 1% low frame rate,
+   * dropped refreshes, counters, memory, events and the diagnostics that fired. The REC plate
+   * (Performance mode) does the same.
+   */
+  public startRecording(): this {
+    if (this._recorder !== null) return this;
+    this._recorder = new Recorder(this.memory());
+    this._overlay.setControl('rec', true);
+    return this;
+  }
+
+  /** Stops the recording and returns its report, or null when nothing was recorded. */
+  public stopRecording(): StatsReport | null {
+    const recorder = this._recorder;
+    if (recorder === null) return null;
+    this._recorder = null;
+    this._overlay.setControl('rec', false);
+    const report = recorder.finish(this.memory(), { budget: this._budget, profile: this._profile, backend: this._sampler.backend });
+    if (report === null) return null;
+    this._report = report;
+    if (this._onReport !== null) this.guard('onReport', () => this._onReport?.(report));
+    return report;
+  }
+
+  /**
+   * Marks this moment on the graphs with a flag, and in the recording by name: the way to tell
+   * what the app was doing when a frame hitched.
+   *
+   * ```ts
+   * stats.event('level-load');
+   * ```
+   */
+  public event(name: string): this {
+    this._overlay.markEvent();
+    this._recorder?.event(typeof name === 'string' ? name : String(name as unknown));
+    return this;
+  }
+
+  /**
+   * Everything the overlay knows right now as plain JSON: frame values, pacing, counters, the
+   * active findings with their advice, the scene survey, the camera and the last report. Made for
+   * agents, tests and bug reports; cheap, but it may survey the scene, so call it on demand, not
+   * per frame.
+   */
+  public snapshot(): StatsSnapshot {
+    const sampler = this._sampler;
+    const canvas = this._renderer.domElement;
+    const camera = this._camera;
+    const survey = this._scene === null ? null : this.survey(performance.now(), SURVEY_FRESH_MS);
+    const checks = this._diagnostics?.report() ?? [];
+    return {
+      version: 1,
+      mode: this._overlay.mode,
+      backend: sampler.backend,
+      profile: this._profile,
+      budget: this._budget,
+      budgets: { ...this._budgets },
+      frame: { ...this._lastFrame },
+      pacing: this._pacingSummary === null ? null : { ...this._pacingSummary },
+      counters: {
+        calls: sampler.calls, triangles: sampler.triangles, points: sampler.points, lines: sampler.lines,
+        geometries: sampler.geometries, textures: sampler.textures, programs: sampler.programs, passes: sampler.passes
+      },
+      canvas: { width: canvas.width, height: canvas.height, cssWidth: canvas.clientWidth, cssHeight: canvas.clientHeight, pixelRatio: this._renderer.getPixelRatio?.() ?? null },
+      pressure: this._pressure.level,
+      findings: this.findings,
+      checks: checkStates(checks),
+      scene: survey === null ? null : summariseScene(survey),
+      camera: camera === null
+        ? null
+        : { type: camera.type ?? 'Camera', fov: camera.isPerspectiveCamera === true ? (camera.fov ?? null) : null, near: camera.near, far: camera.far, position: [camera.position.x, camera.position.y, camera.position.z] },
+      recording: this.recording,
+      report: this._report
+    };
+  }
+
   /** Diagnostics shown on the TIP plate right now. Empty with `rules: false`. */
   public get findings(): ActiveFinding[] { return this._diagnostics?.findings() ?? []; }
 
@@ -286,6 +416,12 @@ export class Stats {
     this._sampler.end();
     this._pacing.push(this._sampler.lastInterval);
     this._overlay.pushFrame(this._sampler.lastInterval, this._sampler.lastCpu, this._sampler.compiled);
+    const recorder = this._recorder;
+    if (recorder !== null) {
+      recorder.frame(this._sampler.lastInterval, this._sampler.lastCpu, this._sampler.calls, this._sampler.triangles);
+      if (recorder.full) this.stopRecording();
+    }
+
     if (this._sampler.compiled) this._health?.compiled();
 
     const now = performance.now();
@@ -308,6 +444,7 @@ export class Stats {
       // Once a second whatever the refresh interval: the health trends count samples as seconds.
       if (now - this._lastDiagnose >= DIAGNOSE_MS) {
         this._lastDiagnose = now;
+        this.signalPressure();
         this.diagnose(now);
       }
     } catch (error) {
@@ -363,6 +500,11 @@ export class Stats {
     this._lastSurvey = -Infinity;
   }
 
+  /** Camera for the INFO Camera page and the depth precision check. */
+  public set camera(camera: InfoCamera | null) {
+    this._camera = camera;
+  }
+
   /** Removes the overlay and restores the renderer's info settings and canvas. */
   public dispose(): void {
     this._fit.clear();
@@ -373,6 +515,63 @@ export class Stats {
     this._health?.dispose();
     this._sampler.dispose();
     this._overlay.dispose();
+    if (this._exposed) {
+      const live = liveInstances();
+      const index = live.indexOf(this);
+      if (index >= 0) live.splice(index, 1);
+    }
+  }
+
+  private memory(): MemoryCounters {
+    const sampler = this._sampler;
+    return { geometries: sampler.geometries, textures: sampler.textures, programs: sampler.programs, heap: sampler.heap };
+  }
+
+  /** Runs a user callback; a throw is reported once and never reaches the frame. */
+  private guard(name: string, run: () => void): void {
+    try {
+      run();
+    } catch (error) {
+      warnOnce(`${name} threw (${String(error)}).`);
+    }
+  }
+
+  private signalPressure(): void {
+    const frame = this._lastFrame;
+    const signal = this._pressure.update(frame.cpu, frame.gpu, frame.fps, this._budget);
+    if (signal !== null && this._onPressure !== null) this.guard('onPressure', () => this._onPressure?.(signal));
+  }
+
+  /** The REC plate: a click starts a recording, the next one stops it; its tooltip shows the last report. */
+  private recControl(): ControlDefinition {
+    const row = (key: string, value: string): readonly [string, string] => [key, value];
+    return {
+      id: 'rec',
+      label: 'REC',
+      description: 'Record a session: click to start, click again to stop and get a report.',
+      modes: ['performance'],
+      onChange: (active) => {
+        if (active) this.startRecording();
+        else this.stopRecording();
+      },
+      tip: {
+        title: 'Record a session',
+        text: 'Click to start, click again to stop. The report leads with what averages hide: percentiles and the 1% low frame rate. Read it from stats.report or the onReport option.',
+        values: () => {
+          const report = this._report;
+          if (this.recording) return [row('State', 'Recording…')];
+          if (report === null) return [row('Last report', 'None yet')];
+          return [
+            row('Duration', `${report.duration.toFixed(1)} s, ${formatCount(report.frames)} frames`),
+            row('FPS average', formatInt(report.fps.average)),
+            row('FPS 1% low', formatInt(report.fps.low1)),
+            row('Frame P95 / P99', `${formatMs(report.frame.p95)} / ${formatMs(report.frame.p99)} ms`),
+            row('Dropped', formatInt(report.dropped)),
+            row('Draw calls max', formatCount(report.calls.max))
+          ];
+        }
+      }
+    };
   }
 
   /** Once a second: health samples, frame rules and, every 5 s with a scene, scene rules. */
@@ -419,6 +618,8 @@ export class Stats {
       bufferPixels: canvas.width * canvas.height,
       displayPixels: canvas.clientWidth * canvas.clientHeight * dpr * dpr,
       contextLost: health.contextLost,
+      camera: this._camera === null ? null : { near: this._camera.near, far: this._camera.far, perspective: this._camera.isPerspectiveCamera === true },
+      robustDepth: robustDepth(this._renderer),
       shadowMapEnabled: this._renderer.shadowMap?.enabled ?? null,
       scene: null
     };
@@ -429,7 +630,13 @@ export class Stats {
       changed = diagnostics.evaluate({ ...context, scene: this.survey(now, SURVEY_MS) }, 'scene') || changed;
     }
 
-    if (changed) this._overlay.setFindings(diagnostics.findings());
+    const findings = diagnostics.findings();
+    if (changed) this._overlay.setFindings(findings);
+    if (this._recorder !== null && findings.length > 0) {
+      const ids: string[] = [];
+      for (let i = 0, l = findings.length; i < l; i++) ids.push(findings[i].id);
+      this._recorder.findings(ids);
+    }
   }
 
   /**
@@ -456,6 +663,31 @@ export class Stats {
     this._overlay.layout();
     this._rectDirty = false;
   }
+}
+
+function checkStates(checks: readonly { id: string; title: string; status: 'ok' | 'warn' | 'unchecked' }[]): StatsSnapshot['checks'] {
+  const out: StatsSnapshot['checks'] = [];
+  for (let i = 0, l = checks.length; i < l; i++) out.push({ id: checks[i].id, title: checks[i].title, status: checks[i].status });
+  return out;
+}
+
+/** The global array of live instances (created on first use). */
+function liveInstances(): Stats[] {
+  const scope = globalThis as unknown as Record<string, Stats[] | undefined>;
+  scope[GLOBAL_HOOK] ??= [];
+  return scope[GLOBAL_HOOK];
+}
+
+/** A logarithmic or reversed depth buffer keeps precision over wide depth ranges. */
+function robustDepth(renderer: StatsRenderer): boolean {
+  const flags = renderer as { capabilities?: DepthFlags; logarithmicDepthBuffer?: boolean; reversedDepthBuffer?: boolean };
+  const capabilities = flags.capabilities ?? {};
+  return capabilities.logarithmicDepthBuffer === true || capabilities.reversedDepthBuffer === true || flags.logarithmicDepthBuffer === true || flags.reversedDepthBuffer === true;
+}
+
+interface DepthFlags {
+  logarithmicDepthBuffer?: boolean;
+  reversedDepthBuffer?: boolean;
 }
 
 /** The mode remembered from an earlier visit, if storage is available. */

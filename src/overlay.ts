@@ -143,7 +143,7 @@ export class Overlay {
   private readonly _graphIds = new Set<string>();
   private _last: { frame: FrameValues; thresholds: FrameThresholds } = { frame: { fps: null, cpu: null, gpu: null }, thresholds: {} };
   /** Running maximum of the frames in the column being built; -1 while empty. */
-  private readonly _pending = { frames: 0, interval: -1, cpu: -1, gpu: -1, lastGpu: -1, compiled: false };
+  private readonly _pending = { frames: 0, interval: -1, cpu: -1, gpu: -1, lastGpu: -1, compiled: false, event: false };
 
   constructor(budget: number, options: OverlayOptions = {}) {
     injectStyles(document);
@@ -426,7 +426,8 @@ export class Overlay {
     const s = this._samples;
     if (p.interval > 0) {
       s.frame.push(p.interval);
-      s.compiles.push(p.compiled ? 1 : 0);
+      // 1: a shader compile (a tick), 2: a named event (a flag), 3: both.
+      s.compiles.push((p.compiled ? 1 : 0) + (p.event ? 2 : 0));
     }
 
     s.cpu.push(p.cpu);
@@ -442,12 +443,25 @@ export class Overlay {
     p.cpu = -1;
     p.gpu = -1;
     p.compiled = false;
+    p.event = false;
     const custom = this._content.get(this._mode)?.graphs ?? [];
     for (let i = 0, l = custom.length; i < l; i++) {
       if (custom[i].timing === 'frame') custom[i].sample?.();
     }
 
     this.drawGraphs(false);
+  }
+
+  /** Flags the graph column being built with a named event (see `Stats.event()`). */
+  public markEvent(): void {
+    this._pending.event = true;
+  }
+
+  /** Sets a toggle plate from code; its onChange runs as on a click. */
+  public setControl(id: string, active: boolean): void {
+    for (let i = 0, l = this._toggles.length; i < l; i++) {
+      if (this._toggles[i].definition.id === id) this._toggles[i].active = active;
+    }
   }
 
   /** Records one GPU time sample; it joins the column being built. */
@@ -882,7 +896,8 @@ function frameTip(budget: number, frame: Samples): TipContent {
       { mark: 'alert', text: 'Missed one screen refresh (past 1.25× the budget)' },
       { mark: 'clip', text: 'Missed two or more: the stutter users see' },
       { mark: 'budget-tick', text: 'The frame budget' },
-      { mark: 'event-tick', text: 'A new shader program was created in that frame' }
+      { mark: 'event-tick', text: 'A new shader program was created in that frame' },
+      { mark: 'flag-tick', text: 'An event the app marked with stats.event()' }
     ],
     values: () => rangeRows(frame, budget),
     advice: 'A red column under a top tick is a shader compile: warm up with renderer.compileAsync(scene, camera) before showing the scene.'
@@ -909,7 +924,8 @@ function mergedTip(budget: number, s: { frame: Samples; cpu: Samples; gpu: Sampl
       { mark: 'cpu', text: 'CPU time' },
       { mark: 'ink', text: 'All three peak together (colours add like light)' },
       { mark: 'lane', text: 'Lane under the box: yellow missed one refresh, red two or more' },
-      { mark: 'event-tick', text: 'A new shader program was created' }
+      { mark: 'event-tick', text: 'A new shader program was created' },
+      { mark: 'flag-tick', text: 'An event the app marked with stats.event()' }
     ],
     values: () => [
       ['Frame max', orDash(s.frame.max(128), (v) => `${formatMs(v)} ms`)],

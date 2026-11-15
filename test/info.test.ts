@@ -29,7 +29,7 @@ describe('INFO pages', () => {
     const renderer = glRenderer();
     const titles = [];
     for (let i = 0; i < INFO_PAGES + 1; i++) titles.push(buildPage(i, renderer, 'webgl').title);
-    expect(titles).toEqual(['Renderer', 'Limits', 'Programs', 'Scene', 'Diagnostics', 'Renderer']);
+    expect(titles).toEqual(['Renderer', 'Limits', 'Programs', 'Scene', 'Camera', 'Diagnostics', 'Renderer']);
   });
 
   it('describes the WebGL renderer and flags suspicious settings', () => {
@@ -95,8 +95,18 @@ describe('INFO pages', () => {
     expect(buildPage(0, renderer, 'webgl', { budgets: mobile }).rows.find((row) => row.key === 'Pixel ratio')?.warn).toBe(true);
   });
 
+  it('describes the camera as a lens, and flags a depth range that will z-fight', () => {
+    expect(value(buildPage(4, glRenderer(), 'webgl'), 'Note')).toBe('Pass { camera } to Stats');
+    const camera = { isPerspectiveCamera: true, fov: 39.6, aspect: 1.5, zoom: 1, near: 0.001, far: 5000, position: { x: 0, y: 1.5, z: 250 } };
+    const page = buildPage(4, glRenderer(), 'webgl', { camera: () => camera });
+    expect(value(page, 'Type')).toBe('Perspective');
+    expect(value(page, 'Focal (35 mm eq.)')).toBe('33 mm');
+    expect(value(page, 'Position')).toBe('0.00, 1.50, 250');
+    expect(page.rows.find((row) => row.key === 'Far / near')?.warn).toBe(true);
+  });
+
   it('lists the diagnostics, warnings first', () => {
-    expect(value(buildPage(4, glRenderer(), 'webgl'), 'Checks')).toBe('Off');
+    expect(value(buildPage(5, glRenderer(), 'webgl'), 'Checks')).toBe('Off');
     const diagnostics = new Diagnostics([
       { id: 'fine', title: 'Fine', check: () => null },
       { id: 'bad', title: 'Bad', check: () => ({ message: 'x', advice: 'y' }) },
@@ -104,7 +114,7 @@ describe('INFO pages', () => {
     ]);
     diagnostics.evaluate(makeContext(), 'frame');
     diagnostics.evaluate(makeContext(), 'frame');
-    const page = buildPage(4, glRenderer(), 'webgl', { diagnostics });
+    const page = buildPage(5, glRenderer(), 'webgl', { diagnostics });
     expect(page.rows.map((row) => [row.key, row.value, row.warn])).toEqual([
       ['Checks', '3, 1 to look at', true], ['Bad', 'Look', true], ['Fine', 'OK', false], ['Later', '—', false]
     ]);
