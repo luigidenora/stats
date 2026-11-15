@@ -159,4 +159,15 @@ describe('Diagnostics', () => {
     diagnostics.add({ id: 'a', title: 'A2', check: () => null });
     expect(diagnostics.findings()).toEqual([]);
   });
+
+  it('reads a check that returns undefined or a malformed finding as fine, with one warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const diagnostics = new Diagnostics([
+      { id: 'forgot', title: 'Forgot', check: (() => undefined) as never },
+      { id: 'shape', title: 'Shape', check: (() => ({ text: 'no message' })) as never }
+    ]);
+    for (let i = 0; i < 4; i++) diagnostics.evaluate(makeContext(), 'frame');
+    expect(diagnostics.findings()).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
 });

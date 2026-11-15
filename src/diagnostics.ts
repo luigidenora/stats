@@ -137,7 +137,10 @@ export class Diagnostics {
 
       let finding: DiagnosticFinding | null;
       try {
-        finding = state.rule.check(context);
+        const result: unknown = state.rule.check(context);
+        finding = isFinding(result) ? result : null;
+        // A forgotten return (undefined) is "fine", like null; anything else malformed says so once.
+        if (finding === null && result !== null && result !== undefined) warnOnce(`diagnostic rule "${state.rule.id}" must return { message, advice } or null.`);
       } catch (error) {
         state.errors++;
         if (state.errors >= MAX_ERRORS) {
@@ -191,6 +194,12 @@ export class Diagnostics {
 
     return out;
   }
+}
+
+function isFinding(value: unknown): value is DiagnosticFinding {
+  if (typeof value !== 'object' || value === null) return false;
+  const finding = value as { message?: unknown; advice?: unknown };
+  return typeof finding.message === 'string' && typeof finding.advice === 'string';
 }
 
 function sameFinding(a: DiagnosticFinding | null, b: DiagnosticFinding | null): boolean {

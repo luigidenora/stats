@@ -8,6 +8,8 @@ import { formatBytes, formatCount, formatMs } from './format.js';
 
 const ms = (v: number): string => `${formatMs(v)} ms`;
 const MB = 1048576;
+/** Common display refresh rates above 60 Hz, for the budget advice. */
+const REFRESH_RATES = [72, 75, 90, 100, 120, 144, 165, 240];
 
 export const FRAME_RULES: readonly DiagnosticRule[] = [
   {
@@ -34,6 +36,20 @@ export const FRAME_RULES: readonly DiagnosticRule[] = [
       // Past 90% one side usually dominates (gpu-bound, cpu-bound); when neither does, both are the problem.
       if (cpu === null || gpu === null || cpu > gpu * 1.3 || gpu > cpu * 1.3) return null;
       return { message: `CPU ${ms(cpu)} and GPU ${ms(gpu)}: both near or over the ${ms(budget)} budget.`, advice: 'Cutting one side will not be enough: reduce draw calls (CPU) and pixels or shading cost (GPU) together.' };
+    }
+  },
+  {
+    id: 'refresh-rate',
+    title: 'Display faster than the budget',
+    check: ({ fps, budget }) => {
+      const target = 1000 / budget;
+      if (fps === null || fps <= target * 1.15) return null;
+      let rate = REFRESH_RATES[0];
+      for (let i = 1, l = REFRESH_RATES.length; i < l; i++) {
+        if (Math.abs(REFRESH_RATES[i] - fps) < Math.abs(rate - fps)) rate = REFRESH_RATES[i];
+      }
+
+      return { message: `${Math.round(fps)} fps against a ${Math.round(target)} fps budget.`, advice: `The budget is not detected: pass { budget: 1000 / ${rate} } so late frames on this display show as late.` };
     }
   },
   {

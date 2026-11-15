@@ -57,7 +57,7 @@ across page loads.
 |---|---|---|
 | `mode` | `'simple'` | Initial mode (a remembered choice wins unless `remember: false`) |
 | `remember` | `true` | Store the mode picked with the mode plate in localStorage |
-| `budget` | `1000 / 60` | Frame budget in ms: dials, graph scales, default thresholds |
+| `budget` | `1000 / 60` | Frame budget in ms: dials, graph scales, default thresholds. Not detected: pass `1000 / 120` for a 120 Hz display |
 | `interval` | `250` | Text refresh period in ms |
 | `graphStep` | `3` | Frames per graph column; each column keeps its slowest frame |
 | `interactive` | `true` | Tooltips and a clickable mode plate; `false` makes the overlay passive |

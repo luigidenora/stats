@@ -92,7 +92,7 @@ const scenarios: Scenario[] = [
     title: '120 Hz screen',
     tag: 'budget 8.3 ms',
     hz: 120,
-    note: 'The budget follows the refresh rate: at 120 Hz the budget ticks sit at 8.3 ms and the same loads as before come closer to the limit.',
+    note: 'With budget: 1000 / 120 the budget ticks sit at 8.3 ms and the same loads as before come closer to the limit. The budget is an option, not detected.',
     frame: (t, b) => ({ interval: t % 41 === 0 ? b * 1.7 : gauss(b, 0.15), cpu: pos(gauss(2.5, 0.5)), gpu: pos(gauss(5.5, 0.8)) })
   },
   {

@@ -183,6 +183,21 @@ describe('modes', () => {
     expect(warn.mock.calls.some((call) => String(call[0]).includes('lod.switches'))).toBe(true);
   });
 
+  it('skips a histogram with a null domain, and survives ticks that throw', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const stats = setup();
+    const histogram = { id: 'h', label: ['A', 'B'] as const, unit: 'u', channels: [{ name: 'L0', read: () => [1, 2] }] };
+    expect(() => stats.defineMode({ id: 'nul', name: 'Null', code: 'NUL', description: 'x', histogram: { ...histogram, domain: null as never } })).not.toThrow();
+    expect(stats.modes.some((mode) => mode.id === 'nul')).toBe(false);
+    stats.defineMode({ id: 'tick', name: 'Ticks', code: 'TICK', description: 'x', histogram: { ...histogram, id: 'h2', domain: { min: 0, max: 10 }, ticks: () => {
+      throw new Error('boom');
+    } } });
+    stats.mode = 'tick';
+    expect(() => {
+      run(stats, 1);
+    }).not.toThrow();
+  });
+
   it('extends a built-in mode', () => {
     const stats = setup({ mode: 'performance' });
     stats.extendMode('performance', { metrics: [{ id: 'bodies', label: 'Bodies', place: 'top', plate: 'BODY', read: () => 7 }] });

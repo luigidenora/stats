@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { geometryBytes, surveyScene, textureBytes } from '../src/scene-survey.js';
 
 function sizedTexture(width: number, height: number, options: Partial<THREE.Texture> = {}): THREE.Texture {
@@ -109,6 +109,44 @@ describe('surveyScene on real three.js objects', () => {
     const survey = surveyScene(scene);
     expect(survey.meshes).toBe(3);
     expect(survey.materials).toBe(2);
+  });
+
+  it('does not count hidden lights and meshes (or anything under a hidden parent) as rendered', () => {
+    const scene = new THREE.Scene();
+    const pool = new THREE.Group();
+    pool.visible = false;
+    for (let i = 0; i < 5; i++) {
+      const light = new THREE.PointLight();
+      light.castShadow = true;
+      pool.add(light);
+    }
+
+    const off = new THREE.SpotLight();
+    off.visible = false;
+    const hiddenMesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+    hiddenMesh.visible = false;
+    scene.add(pool, off, hiddenMesh, new THREE.DirectionalLight(), new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()));
+    const survey = surveyScene(scene);
+    expect(survey.lights).toBe(1);
+    expect(survey.shadowLights).toBe(0);
+    expect(survey.pointShadows).toBe(0);
+    expect(survey.triangles).toBe(12);
+    // Still in memory: both geometries and materials count.
+    expect(survey.geometries).toBe(2);
+    expect(survey.materials).toBe(2);
+  });
+
+  it('estimates a huge BatchedMesh from a bounded sample instead of probing every id', () => {
+    const scene = new THREE.Scene();
+    const batched = new THREE.BatchedMesh(6000, 100, 300, new THREE.MeshBasicMaterial());
+    const box = batched.addGeometry(new THREE.BoxGeometry());
+    for (let i = 0; i < 6000; i++) batched.addInstance(box);
+    for (let i = 0; i < 6000; i += 2) batched.deleteInstance(i);
+    scene.add(batched);
+    const probe = vi.spyOn(batched, 'getGeometryIdAt');
+    const survey = surveyScene(scene);
+    expect(probe.mock.calls.length).toBeLessThanOrEqual(2048);
+    expect(survey.triangles).toBe(3000 * 12);
   });
 
   it('reads lights, shadows and point shadows', () => {

@@ -62,6 +62,7 @@ export interface SurveyObject {
   isPointLight?: boolean | undefined;
   isLOD?: boolean | undefined;
   castShadow?: boolean | undefined;
+  visible?: boolean | undefined;
   frustumCulled?: boolean | undefined;
   matrixAutoUpdate?: boolean | undefined;
   count?: number | undefined;
@@ -94,7 +95,7 @@ export interface SceneSurvey {
   /** Lowest instanceCount / maxInstanceCount over the BatchedMeshes, or null without any. */
   batchedFill: number | null;
   lods: number;
-  /** Triangles of every mesh as submitted (instances included), before culling. */
+  /** Triangles of every visible mesh as submitted (instances included), before culling. */
   triangles: number;
   vertices: number;
   /** Triangles of each mesh (instances included), for the triangles-per-draw histogram. */
@@ -115,7 +116,7 @@ export interface SceneSurvey {
   textureSides: number[];
   topTextures: NamedSize[];
   lightsByType: Map<string, number>;
-  /** Lights shaded per fragment: every light but ambient, hemisphere and probes. */
+  /** Visible lights shaded per fragment: every light but ambient, hemisphere and probes. */
   lights: number;
   shadowLights: number;
   pointShadows: number;
@@ -141,6 +142,8 @@ const NEAREST_FILTER = 1003;
 const LINEAR_FILTER = 1006;
 const DOUBLE_SIDE = 2;
 const TOP = 5;
+/** Instance ids of a BatchedMesh probed per survey; larger ones are estimated from this sample. */
+const BATCHED_SCAN = 2048;
 const AMBIENT_LIGHTS = new Set(['AmbientLight', 'HemisphereLight', 'LightProbe']);
 
 function texelBytes(type: number | undefined): number {
@@ -189,7 +192,8 @@ function trianglesOf(geometry: SurveyGeometry | null | undefined): number {
 
 /**
  * Triangles a BatchedMesh draws: its live instances times their geometry's range. Its geometry is a
- * shared buffer sized for the reserved capacity, so counting that would overstate it.
+ * shared buffer sized for the reserved capacity, so counting that would overstate it. Exact up to
+ * BATCHED_SCAN instance ids, an estimate beyond.
  */
 function batchedTriangles(object: SurveyObject): number {
   const { getGeometryIdAt, getGeometryRangeAt } = object;
@@ -198,7 +202,10 @@ function batchedTriangles(object: SurveyObject): number {
   const max = object.maxInstanceCount ?? 0;
   const perGeometry = new Map<number, number>();
   let triangles = 0;
-  for (let id = 0, found = 0; id < max && found < live; id++) {
+  // Each deleted id costs an exception (there is no public "is this id live"): bound the scan.
+  const limit = Math.min(max, BATCHED_SCAN);
+  let found = 0;
+  for (let id = 0; id < limit && found < live; id++) {
     let geometryId: number;
     try {
       geometryId = getGeometryIdAt.call(object, id);
@@ -220,6 +227,9 @@ function batchedTriangles(object: SurveyObject): number {
 
     triangles += count;
   }
+
+  // Past the scan limit the rest is assumed to look like the sample.
+  if (max > limit && found > 0 && found < live) triangles = Math.round((triangles * live) / found);
 
   return triangles;
 }
@@ -301,12 +311,18 @@ export function surveyScene(scene: InfoScene): SceneSurvey {
     }
   };
 
+  // Objects that are not rendered: `visible = false`, or under such a parent (parents come first).
+  const hiddenObjects = new Set<object>();
+
   scene.traverse((object) => {
     survey.objects++;
-    if (object.frustumCulled === false && object.isMesh === true) survey.frustumCulledOff++;
+    const hidden = object.visible === false || (object.parent !== null && object.parent !== undefined && hiddenObjects.has(object.parent));
+    if (hidden) hiddenObjects.add(object);
+    if (object.frustumCulled === false && object.isMesh === true && !hidden) survey.frustumCulledOff++;
     if (object.matrixAutoUpdate !== false) survey.matrixAutoUpdate++;
     if (object.isLOD === true) survey.lods++;
-    if (object.isLight === true) {
+    // A hidden light costs nothing: no light loop, no shadow pass.
+    if (object.isLight === true && !hidden) {
       // Ambient, hemisphere and probe light is one uniform term, not a per-fragment light loop.
       if (!AMBIENT_LIGHTS.has(object.type)) survey.lights++;
       increment(survey.lightsByType, object.type);
@@ -335,9 +351,13 @@ export function surveyScene(scene: InfoScene): SceneSurvey {
       if (max > 0) survey.batchedFill = Math.min(survey.batchedFill ?? 1, (object.instanceCount ?? 0) / max);
     }
 
-    const triangles = object.isBatchedMesh === true ? batchedTriangles(object) : trianglesOf(geometry) * copies;
-    survey.triangles += triangles;
-    survey.trianglesPerMesh.push(triangles);
+    // Hidden meshes keep their memory (counted below) but submit nothing.
+    if (!hidden) {
+      const triangles = object.isBatchedMesh === true ? batchedTriangles(object) : trianglesOf(geometry) * copies;
+      survey.triangles += triangles;
+      survey.trianglesPerMesh.push(triangles);
+    }
+
     if (object.skeleton !== undefined) survey.maxBones = Math.max(survey.maxBones, object.skeleton.bones.length);
     if ((object.morphTargetInfluences?.length ?? 0) > 0) survey.morphMeshes++;
 
@@ -345,7 +365,7 @@ export function surveyScene(scene: InfoScene): SceneSurvey {
     for (let i = 0, l = list.length; i < l; i++) visitMaterial(list[i]);
     if (geometry !== undefined && geometry !== null) {
       // LOD levels share geometry by design and switch per object: not plain copies to instance.
-      if (object.isInstancedMesh !== true && object.isBatchedMesh !== true && object.isSkinnedMesh !== true && (object.parent as { isLOD?: boolean } | null | undefined)?.isLOD !== true && list.length === 1) {
+      if (object.isInstancedMesh !== true && object.isBatchedMesh !== true && object.isSkinnedMesh !== true && !hidden && (object.parent as { isLOD?: boolean } | null | undefined)?.isLOD !== true && list.length === 1) {
         const key = `${geometry.uuid}|${list[0].uuid}`;
         pairs.set(key, (pairs.get(key) ?? 0) + 1);
       }

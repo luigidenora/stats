@@ -1,5 +1,5 @@
 import { checkControl, Toggle } from './controls.js';
-import { checkDistribution, checkGraph, checkHistogram, checkMetric, customGraphPanel, distributionPanel, finite, graphPanel, safeRead, warnOnce, type Panel } from './custom.js';
+import { checkDistribution, checkGraph, checkHistogram, checkMetric, safeFormat, customGraphPanel, distributionPanel, finite, graphPanel, safeRead, warnOnce, type Panel } from './custom.js';
 import type { ActiveFinding } from './diagnostics.js';
 import { HISTOGRAM_WIDTH, histogramPanel, imageHistogramPanel, type HistogramPanel } from './histogram-panel.js';
 import { ImageSampler } from './image.js';
@@ -225,7 +225,8 @@ export class Overlay {
     }
 
     this.removeMetric(metric.id);
-    this._slots.push(metric.place === 'top' ? this.topSlot(metric) : this.gridSlot(metric));
+    const safe = metric.format === undefined ? metric : { ...metric, format: safeFormat(metric.id, metric.format) };
+    this._slots.push(safe.place === 'top' ? this.topSlot(safe) : this.gridSlot(safe));
     this.applyMode();
     if (this.root.isConnected) this.layout();
     return true;

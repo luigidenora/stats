@@ -18,6 +18,8 @@ const STORAGE_KEY = 'tez-stats-mode';
 const DIAGNOSE_MS = 1000;
 const SURVEY_MS = 5000;
 const SURVEY_FRESH_MS = 2000;
+/** A survey waits at least this many times its own duration: at most 0.4% of the time, however large the scene. */
+const SURVEY_COST_FACTOR = 250;
 
 export interface StatsOptions {
   /** Scene for the INFO mode's scene summary (objects, meshes, lights, materials, textures). Optional. */
@@ -99,6 +101,12 @@ export class Stats {
   private _scene: InfoScene | null;
   /** A remembered custom mode that is not defined yet: applied as soon as defineMode() adds it. */
   private _pendingMode: string | null = null;
+  /** A custom `mode` option not defined yet: applied when defined, unless the remembered one already was. */
+  private _wantedMode: string | null = null;
+  /** After a hidden tab: wait one interval before refreshing, so the readouts have frames to average. */
+  private _holdRefresh = false;
+  /** Duration of the last scene survey, in ms. */
+  private _surveyCost = 0;
   private _lastRefresh = 0;
   private _rectDirty = true;
   private readonly _onLayout = (): void => {
@@ -111,6 +119,7 @@ export class Stats {
     if (document.visibilityState !== 'hidden') return;
     this._sampler.pause();
     this._pacing.reset();
+    this._holdRefresh = true;
   };
 
   constructor(renderer: StatsRenderer, options: StatsOptions = {}) {
@@ -118,7 +127,9 @@ export class Stats {
     this._budget = options.budget ?? 1000 / 60;
     this._interval = options.interval ?? 250;
     this._thresholds = { ...defaultThresholds(this._budget), ...options.thresholds };
-    this._remember = options.remember ?? true;
+    const interactive = options.interactive ?? true;
+    // Without the plate nobody can pick a mode here: a choice remembered elsewhere must not override the option.
+    this._remember = (options.remember ?? true) && interactive;
     const resolved = resolveBudgets(options.profile ?? 'auto', options.budgets);
     this._profile = resolved.profile;
     this._budgets = resolved.budgets;
@@ -130,14 +141,16 @@ export class Stats {
     const builtin = stored !== null && findMode(MODES, stored) !== null;
     // A custom mode (remembered, or asked for in the options) applies as soon as defineMode() adds it.
     if (stored !== null && !builtin) this._pendingMode = stored;
-    else if (stored === null && options.mode !== undefined && findMode(MODES, options.mode) === null) this._pendingMode = options.mode;
+    // Kept even with a remembered custom mode: that one may belong to another page of this origin and never be defined.
+    if (!builtin && options.mode !== undefined && findMode(MODES, options.mode) === null) this._wantedMode = options.mode;
     this._sampler = new FrameSampler(renderer);
     this._overlay = new Overlay(this._budget, {
-      interactive: options.interactive ?? true,
+      interactive,
       step: options.graphStep ?? 3,
       mode: builtin ? stored : (options.mode !== undefined && findMode(MODES, options.mode) !== null ? options.mode : 'simple'),
       onModeChange: (mode) => {
         this._pendingMode = null;
+        this._wantedMode = null;
         if (this._remember) storeMode(mode);
       },
       onLayout: () => {
@@ -189,6 +202,7 @@ export class Stats {
   public set mode(mode: StatsMode) {
     // An explicit choice wins over a remembered custom mode that is not defined yet.
     this._pendingMode = null;
+    this._wantedMode = null;
     this._overlay.setMode(mode);
   }
 
@@ -211,8 +225,13 @@ export class Stats {
    * ```
    */
   public defineMode(definition: ModeDefinition): this {
-    if (this._overlay.defineMode(definition) && this._pendingMode === definition.id) {
+    if (!this._overlay.defineMode(definition)) return this;
+    if (this._pendingMode === definition.id) {
       this._pendingMode = null;
+      this._wantedMode = null;
+      this._overlay.setMode(definition.id);
+    } else if (this._wantedMode === definition.id) {
+      this._wantedMode = null;
       this._overlay.setMode(definition.id);
     }
 
@@ -270,18 +289,29 @@ export class Stats {
     if (this._sampler.compiled) this._health?.compiled();
 
     const now = performance.now();
-    if (now - this._lastRefresh >= this._interval) {
+    if (this._holdRefresh) {
+      this._holdRefresh = false;
       this._lastRefresh = now;
-      if (this._rectDirty) this.syncRect();
-      this._pacingSummary = this._pacing.summary(this._budget);
-      this._lastFrame = { ...this._sampler.take(), heap: this._sampler.heap };
-      this._overlay.refresh(this._lastFrame, this._budget, this._thresholds);
     }
 
-    // Once a second whatever the refresh interval: the health trends count samples as seconds.
-    if (now - this._lastDiagnose >= DIAGNOSE_MS) {
-      this._lastDiagnose = now;
-      this.diagnose(now);
+    // Reads, rules and scenes are guarded one by one; this net is for whatever they miss. The
+    // overlay must never throw into the app's frame callback.
+    try {
+      if (now - this._lastRefresh >= this._interval) {
+        this._lastRefresh = now;
+        if (this._rectDirty || this.moved()) this.syncRect();
+        this._pacingSummary = this._pacing.summary(this._budget);
+        this._lastFrame = { ...this._sampler.take(), heap: this._sampler.heap };
+        this._overlay.refresh(this._lastFrame, this._budget, this._thresholds);
+      }
+
+      // Once a second whatever the refresh interval: the health trends count samples as seconds.
+      if (now - this._lastDiagnose >= DIAGNOSE_MS) {
+        this._lastDiagnose = now;
+        this.diagnose(now);
+      }
+    } catch (error) {
+      warnOnce(`a refresh failed and was skipped (${String(error)}).`);
     }
   }
 
@@ -352,14 +382,18 @@ export class Stats {
    */
   private survey(now: number, maxAge: number): SceneSurvey | null {
     if (this._scene === null) return null;
-    if (now - this._surveyedAt < maxAge) return this._survey;
+    // A large scene takes long to walk: space the surveys out so they never become the stutter they look for.
+    if (now - this._surveyedAt < Math.max(maxAge, this._surveyCost * SURVEY_COST_FACTOR)) return this._survey;
     this._surveyedAt = now;
+    const started = performance.now();
     try {
       this._survey = surveyScene(this._scene);
     } catch (error) {
       warnOnce(`the scene could not be surveyed (${String(error)}); scene pages and checks wait for the next try.`);
       this._survey = null;
     }
+
+    this._surveyCost = performance.now() - started;
 
     return this._survey;
   }
@@ -396,6 +430,17 @@ export class Stats {
     }
 
     if (changed) this._overlay.setFindings(diagnostics.findings());
+  }
+
+  /**
+   * The canvas moved or changed size without a resize or scroll event (a layout shift above it).
+   * Checked at each refresh; not in INFO, where the canvas is transformed into its thumbnail.
+   */
+  private moved(): boolean {
+    if (this._overlay.mode === 'info') return false;
+    const rect = this._renderer.domElement.getBoundingClientRect();
+    const last = this._rect;
+    return rect.left !== last.left || rect.top !== last.top || rect.width !== last.width || rect.height !== last.height;
   }
 
   /** Lays the overlay exactly over the canvas. */

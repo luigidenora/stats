@@ -88,6 +88,44 @@ describe('Stats lifecycle', () => {
     expect(stats.mode).toBe('performance');
   });
 
+  it('applies a custom mode from the options even when a stale custom mode is remembered', () => {
+    localStorage.setItem('tez-stats-mode', 'mode-of-another-app');
+    const { stats } = setup({ mode: 'lod' });
+    stats.defineMode({ id: 'lod', name: 'Level of detail', code: 'LOD', description: 'LOD levels.' });
+    expect(stats.mode).toBe('lod');
+  });
+
+  it('ignores the remembered mode when the overlay is not interactive (no plate to change it)', () => {
+    localStorage.setItem('tez-stats-mode', 'memory');
+    expect(setup({ interactive: false, mode: 'performance' }).stats.mode).toBe('performance');
+  });
+
+  it('follows a canvas that moves without resizing (a banner opening above it)', () => {
+    const renderer = fakeRenderer({ canvas: document.createElement('canvas') });
+    let top = 0;
+    renderer.domElement.getBoundingClientRect = () => new DOMRect(0, top, 300, 150);
+    const { stats } = setup({}, renderer);
+    run(stats, 0.5);
+    expect(stats.element.style.top).toBe('0px');
+    top = 40;
+    run(stats, 0.5);
+    expect(stats.element.style.top).toBe('40px');
+  });
+
+  it('does not show a bogus frame rate on the first refresh after a hidden tab', () => {
+    const { stats } = setup();
+    run(stats, 1);
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    now += 5000;
+    run(stats, 0.03);
+    const fps = must(stats.element.querySelector<HTMLElement>('[data-tip^="Frames per second"]'));
+    expect(fps.textContent).toContain('60');
+    run(stats, 1);
+    expect(fps.textContent).toContain('60');
+  });
+
   it('waits for a remembered custom mode until defineMode adds it', () => {
     localStorage.setItem('tez-stats-mode', 'lod');
     const { stats } = setup();
@@ -211,6 +249,17 @@ describe('Stats budgets and diagnostics', () => {
     expect(check.mock.calls.length).toBeGreaterThanOrEqual(4);
   });
 
+  it('surveys a slow scene less often, so the overlay is not the hitch it reports', () => {
+    let surveys = 0;
+    const scene: InfoScene = { traverse: () => {
+      surveys++;
+      now += 100;
+    } };
+    const { stats } = setup({ scene });
+    run(stats, 20);
+    expect(surveys).toBeLessThanOrEqual(2);
+  });
+
   it('never lets a broken scene break the frame', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const scene: InfoScene = { traverse: () => {
@@ -280,6 +329,18 @@ describe('Stats custom content', () => {
     expect(onChange).toHaveBeenLastCalledWith(true);
     toggle.click();
     expect(onChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('keeps going when a metric format throws, and falls back to the default format', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { stats } = setup({ metrics: [{ id: 'fmt', label: 'Formatted', place: 'top', plate: 'FMT', read: () => 7, format: () => {
+      throw new Error('boom');
+    } }] });
+    expect(() => {
+      run(stats, 1);
+    }).not.toThrow();
+    expect(must(stats.element.querySelector('[data-tip="Formatted"]')).textContent).toContain('7');
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it('keeps going when a page metric throws', () => {

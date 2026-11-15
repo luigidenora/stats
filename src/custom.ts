@@ -60,6 +60,23 @@ export function safeRead<T>(id: string, read: () => T | null, valid: (value: T) 
 
 export const finite = (value: number): boolean => Number.isFinite(value);
 
+/** Wraps a user `format` so it can never break a refresh: after one throw the default format takes over, with a warning. */
+export function safeFormat(id: string, format: (value: number) => string): (value: number) => string {
+  let failed = false;
+  return (value) => {
+    if (failed) return formatCount(value);
+    try {
+      // Plain JavaScript may return anything: the overlay writes text.
+      const text: unknown = format(value);
+      return typeof text === 'string' ? text : String(text);
+    } catch (error) {
+      failed = true;
+      warnOnce(`"${id}": format threw and the default format is used instead (${String(error)}).`);
+      return formatCount(value);
+    }
+  };
+}
+
 function checkLabel(id: string, label: unknown): string | null {
   if (!Array.isArray(label) || label.length !== 2 || typeof label[0] !== 'string' || typeof label[1] !== 'string') {
     return `"${id}": label must be two short strings, e.g. ['LOD', 'SW/S'].`;
@@ -114,8 +131,8 @@ export function checkHistogram(histogram: HistogramDefinition): string | null {
     if (typeof channel !== 'object' || channel === null || typeof channel.read !== 'function') return `histogram "${id}": channel ${i} needs a read function.`;
   }
 
-  const domain = histogram.domain as { min?: unknown; max?: unknown } | undefined;
-  if (typeof domain !== 'object' || typeof domain.min !== 'number' || typeof domain.max !== 'number' || !(domain.max > domain.min)) {
+  const domain = histogram.domain as { min?: unknown; max?: unknown } | null | undefined;
+  if (typeof domain !== 'object' || domain === null || typeof domain.min !== 'number' || typeof domain.max !== 'number' || !(domain.max > domain.min)) {
     return `histogram "${id}": domain needs finite numbers with min < max.`;
   }
 

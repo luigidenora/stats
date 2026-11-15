@@ -52,6 +52,8 @@ interface TimerExt {
   GPU_DISJOINT_EXT: number;
 }
 
+const TIMER_EXTENSION = 'EXT_disjoint_timer_query_webgl2';
+
 /** WebGL 2 GPU timer through EXT_disjoint_timer_query_webgl2. Results arrive a few frames late. */
 class WebGLTimer {
   private readonly _pending: WebGLQuery[] = [];
@@ -62,12 +64,15 @@ class WebGLTimer {
   /** Called with each resolved GPU time, in ms. */
   public onSample: ((ms: number) => void) | null = null;
 
-  private constructor(private readonly _gl: WebGL2RenderingContext, private readonly _ext: TimerExt) {}
+  /** The context was lost: its extensions must be asked for again once it is back. */
+  private _lost = false;
+
+  private constructor(private readonly _gl: WebGL2RenderingContext, private _ext: TimerExt | null) {}
 
   public static create(renderer: StatsRenderer): WebGLTimer | null {
     const gl = renderer.getContext?.() as Partial<WebGL2RenderingContext> | undefined;
     if (gl?.createQuery === undefined || gl.getExtension === undefined || gl.isContextLost === undefined) return null;
-    const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') as TimerExt | null;
+    const ext = gl.getExtension(TIMER_EXTENSION) as TimerExt | null;
     return ext === null ? null : new WebGLTimer(gl as WebGL2RenderingContext, ext);
   }
 
@@ -76,10 +81,17 @@ class WebGLTimer {
     if (this._gl.isContextLost()) {
       this._pending.length = 0;
       this._active = null;
+      this._lost = true;
       return;
     }
 
-    if (this._active !== null || this._pending.length > 8) return;
+    // A restored context starts without extensions: ask again (null leaves the timer off).
+    if (this._lost) {
+      this._lost = false;
+      this._ext = this._gl.getExtension(TIMER_EXTENSION) as TimerExt | null;
+    }
+
+    if (this._ext === null || this._active !== null || this._pending.length > 8) return;
     // Typed non-null, but some engines return null while the context is lost.
     const query = this._gl.createQuery() as WebGLQuery | null;
     if (query === null) return;
@@ -88,7 +100,7 @@ class WebGLTimer {
   }
 
   public end(): void {
-    if (this._gl.isContextLost()) return;
+    if (this._ext === null || this._gl.isContextLost()) return;
     if (this._active !== null) {
       this._gl.endQuery(this._ext.TIME_ELAPSED_EXT);
       this._pending.push(this._active);
@@ -107,7 +119,7 @@ class WebGLTimer {
   }
 
   public dispose(): void {
-    if (this._gl.isContextLost()) {
+    if (this._ext === null || this._gl.isContextLost()) {
       this._pending.length = 0;
       this._active = null;
       return;
@@ -125,6 +137,7 @@ class WebGLTimer {
 
   private poll(): void {
     const gl = this._gl;
+    if (this._ext === null) return;
     const disjoint = gl.getParameter(this._ext.GPU_DISJOINT_EXT) as boolean;
 
     while (this._pending.length > 0) {
@@ -175,8 +188,12 @@ export class FrameSampler {
   private readonly _segmentSums = new Map<string, number>();
   private readonly _segmentAverages = new Map<string, number>();
   private _programs: number | null = null;
-  /** After pause(): the next begin() starts a fresh averaging window, so the gap is not averaged in. */
-  private _resume = false;
+  /**
+   * The next frame only opens the averaging window (at its end): the first frame, and the first
+   * after pause(). Frames are then counted end to end, so neither the wait before the first frame
+   * nor a hidden-tab gap is averaged into the frame rate.
+   */
+  private _resume = true;
 
   /** Called once per segment name, the first time it has a measured duration. */
   public onSegment: ((name: string) => void) | null = null;
@@ -205,11 +222,6 @@ export class FrameSampler {
 
   public begin(): void {
     const now = performance.now();
-    if (this._resume) {
-      this._resume = false;
-      this.resetWindow(now);
-    }
-
     // After a pause (see pause()) the first interval is unknown, not seconds long.
     this.lastInterval = this._lastBegin > 0 ? now - this._lastBegin : 0;
     this._lastBegin = now;
@@ -249,6 +261,11 @@ export class FrameSampler {
     this._inFrame = false;
     this._cpuSum += this.lastCpu;
     this._frames++;
+    if (this._resume) {
+      this._resume = false;
+      this.resetWindow(now);
+    }
+
     const programs = this.programs;
     this.compiled = programs !== null && this._programs !== null && programs > this._programs;
     this._programs = programs;

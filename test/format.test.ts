@@ -7,7 +7,13 @@ describe('formatters', () => {
     expect(formatCount(4321)).toBe('4.3K');
     expect(formatCount(128_400)).toBe('128K');
     expect(formatCount(1_240_000)).toBe('1.24M');
-    expect(formatCount(-3)).toBe('0');
+    expect(formatCount(-3)).toBe('-3');
+    expect(formatCount(-4321)).toBe('-4.3K');
+    expect(formatCount(0.4)).toBe('0.4');
+    expect(formatCount(2.5)).toBe('2.5');
+    expect(formatCount(12.34)).toBe('12.3');
+    expect(formatCount(99.97)).toBe('100');
+    expect(formatCount(128.4)).toBe('128');
   });
 
   it('formats milliseconds and percentages', () => {

@@ -1,8 +1,14 @@
-/** Compact count: 128, 4.3K, 128K, 1.24M, 12.4M, 128M. */
+/** Compact number: 128, 4.3K, 128K, 1.24M, 12.4M, 128M; small fractions keep two digits (0.4, 12.3); negatives keep their sign. */
 export function formatCount(value: number): string {
-  const v = Math.max(0, value);
+  if (value < 0) return `-${formatCount(-value)}`;
+  const v = value;
   // Bounds sit where rounding would carry into the next magnitude (999.6 is "1.0K", not "1000").
-  if (v < 999.5) return String(Math.round(v));
+  if (v < 999.5) {
+    // Counts are whole; a custom metric or an axis end may not be (0.4, 2.5, 12.3).
+    if (Number.isInteger(v) || v >= 99.95) return String(Math.round(v));
+    return v >= 10 ? v.toFixed(1) : String(Number(v.toPrecision(2)));
+  }
+
   if (v < 9_950) return `${(v / 1e3).toFixed(1)}K`;
   if (v < 999_500) return `${Math.round(v / 1e3)}K`;
   if (v < 9_995_000) return `${(v / 1e6).toFixed(2)}M`;

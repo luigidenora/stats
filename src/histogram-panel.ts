@@ -70,6 +70,7 @@ export function histogramPanel(definition: HistogramDefinition, budgetWarn: (mes
   setText(parts.axisMin, formatCount(scale.min));
   setText(parts.axisMax, `${formatCount(scale.max)} ${definition.unit}`);
   let ticks: number[] = [];
+  const readTicks = definition.ticks === undefined ? null : safeRead<readonly { at: number }[]>(`${definition.id}.ticks`, definition.ticks, Array.isArray);
 
   const readChannel = (i: number): void => {
     const values = reads[i]();
@@ -93,9 +94,12 @@ export function histogramPanel(definition: HistogramDefinition, budgetWarn: (mes
     },
     sample: () => {
       for (let i = 0; i < count; i++) readChannel(i);
-      const marks = definition.ticks?.() ?? [];
+      const marks = readTicks?.() ?? [];
       ticks = [];
-      for (let i = 0, l = marks.length; i < l; i++) ticks.push(position(marks[i].at, scale));
+      for (let i = 0, l = marks.length; i < l; i++) {
+        const at: unknown = (marks[i] as { at?: unknown } | null)?.at;
+        if (typeof at === 'number' && Number.isFinite(at)) ticks.push(position(at, scale));
+      }
     },
     draw: (colors) => {
       graph.draw(counts, ticks, colors);

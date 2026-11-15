@@ -79,6 +79,12 @@ describe('frame rules', () => {
     expect(rule('no-headroom').check(makeContext({ cpu: BUDGET * 1.5, gpu: BUDGET * 1.5 }))?.message).toMatch(/both/i);
   });
 
+  it('refresh-rate: frames arrive clearly faster than the budget assumes', () => {
+    expect(fires('refresh-rate', { fps: 62 })).toBe(false);
+    expect(fires('refresh-rate', { fps: 118 })).toBe(true);
+    expect(rule('refresh-rate').check(makeContext({ fps: 118 }))?.advice).toContain('1000 / 120');
+  });
+
   it('stutter: P95 past 1.25× the budget', () => {
     expect(fires('stutter', { p95: BUDGET * 1.25 })).toBe(false);
     expect(fires('stutter', { p95: BUDGET * 1.3 })).toBe(true);

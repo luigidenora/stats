@@ -22,6 +22,20 @@ function frame(sampler: FrameSampler, cpu: number, interval: number, work?: () =
   now += interval - cpu;
 }
 
+/** Runs `count` frames and closes the window at the end of the last one, as Stats.end() does. */
+function runWindow(sampler: FrameSampler, count: number, cpu: (i: number) => number, interval: number): ReturnType<FrameSampler['take']> {
+  let result: ReturnType<FrameSampler['take']> = { fps: null, cpu: null, gpu: null };
+  for (let i = 0; i < count; i++) {
+    sampler.begin();
+    now += cpu(i);
+    sampler.end();
+    if (i === count - 1) result = sampler.take();
+    now += interval - cpu(i);
+  }
+
+  return result;
+}
+
 describe('FrameSampler', () => {
   it('takes over info.autoReset so every pass of a frame counts, and gives it back', () => {
     const renderer = fakeRenderer();
@@ -49,11 +63,22 @@ describe('FrameSampler', () => {
   it('averages fps and cpu over the window and starts a new one on take()', () => {
     const sampler = new FrameSampler(fakeRenderer());
     expect(sampler.take()).toEqual({ fps: null, cpu: null, gpu: null });
-    for (let i = 0; i < 10; i++) frame(sampler, i % 2 === 0 ? 2 : 4, 20);
-    const window = sampler.take();
-    expect(window.fps).toBeCloseTo(50);
-    expect(window.cpu).toBeCloseTo(3);
+    const averages = runWindow(sampler, 10, (i) => (i % 2 === 0 ? 2 : 4), 20);
+    // The first frame only opens the window: frames 2 to 10 are averaged, end to end.
+    expect(averages.fps).toBeCloseTo(9000 / (9 * 20 + 2));
+    expect(averages.cpu).toBeCloseTo(28 / 9);
     expect(sampler.take().cpu).toBeNull();
+  });
+
+  it('does not count the wait before the first frame, or a pause, in the frame rate', () => {
+    const sampler = new FrameSampler(fakeRenderer());
+    now += 500;
+    expect(runWindow(sampler, 16, () => 2, 1000 / 60).fps).toBeCloseTo(60, 5);
+    sampler.pause();
+    now += 5000;
+    // One frame after the pause is not a rate yet.
+    expect(runWindow(sampler, 1, () => 2, 1000 / 60).fps).toBeNull();
+    expect(runWindow(sampler, 15, () => 2, 1000 / 60).fps).toBeCloseTo(60, 5);
   });
 
   it('splits the CPU time into segments that add up to the frame', () => {
@@ -181,7 +206,7 @@ describe('FrameSampler', () => {
 describe('WebGL GPU timer', () => {
   interface Query { available: boolean; result: number; deleted: boolean }
 
-  function timerRenderer(): { renderer: StatsRenderer; queries: Query[]; gl: { disjoint: boolean; lost: boolean } } {
+  function timerRenderer(): { renderer: StatsRenderer; queries: Query[]; gl: { disjoint: boolean; lost: boolean; extensions: number; noExtension: boolean } } {
     const queries: Query[] = [];
     const gl = {
       disjoint: false,
@@ -201,7 +226,13 @@ describe('WebGL GPU timer', () => {
       },
       getQueryParameter: (query: Query, name: number): unknown => (gl.lost ? null : name === 1 ? query.available : query.result),
       getParameter: (): boolean => gl.disjoint,
-      getExtension: (name: string): unknown => (name === 'EXT_disjoint_timer_query_webgl2' ? { TIME_ELAPSED_EXT: 10, GPU_DISJOINT_EXT: 11 } : null)
+      extensions: 0,
+      noExtension: false,
+      getExtension: (name: string): unknown => {
+        if (name !== 'EXT_disjoint_timer_query_webgl2' || gl.noExtension) return null;
+        gl.extensions++;
+        return { TIME_ELAPSED_EXT: 10, GPU_DISJOINT_EXT: 11 };
+      }
     };
     const renderer = fakeRenderer();
     renderer.getContext = () => gl;
@@ -260,8 +291,7 @@ describe('WebGL GPU timer', () => {
     for (let i = 0; i < 5; i++) frame(sampler, 2, 1000 / 60);
     sampler.pause();
     now += 10_000;
-    for (let i = 0; i < 30; i++) frame(sampler, 2, 1000 / 60);
-    expect(sampler.take().fps).toBeCloseTo(60, 0);
+    expect(runWindow(sampler, 30, () => 2, 1000 / 60).fps).toBeCloseTo(60, 5);
   });
 
   it('survives a context loss and measures again once it is restored', () => {
@@ -280,5 +310,25 @@ describe('WebGL GPU timer', () => {
     fresh.result = 5e6;
     frame(sampler, 1, 16);
     expect(sampler.take().gpu).toBe(5);
+  });
+
+  it('asks for the timer extension again after a context restore, and stays quiet if it is gone', () => {
+    const { renderer, gl } = timerRenderer();
+    const sampler = new FrameSampler(renderer);
+    frame(sampler, 1, 16);
+    expect(gl.extensions).toBe(1);
+    gl.lost = true;
+    frame(sampler, 1, 16);
+    gl.lost = false;
+    frame(sampler, 1, 16);
+    expect(gl.extensions).toBe(2);
+    gl.lost = true;
+    frame(sampler, 1, 16);
+    gl.lost = false;
+    gl.noExtension = true;
+    expect(() => {
+      for (let i = 0; i < 5; i++) frame(sampler, 1, 16);
+    }).not.toThrow();
+    expect(sampler.take().gpu).toBeNull();
   });
 });
