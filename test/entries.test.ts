@@ -170,6 +170,13 @@ describe('probe', () => {
     click(canvas, 5, 5);
     expect(probe.selected).toBeNull();
     expect(probe.copy()).toBeNull();
+    // A point cloud in front does not steal the click from the mesh behind it.
+    const cloud = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 2]), 3)));
+    scene.add(cloud);
+    box.position.set(0, 0, 0);
+    scene.updateMatrixWorld();
+    click(canvas, 100, 100);
+    expect(probe.selected).toBe(box);
   });
 
   it('treats a drag as a camera move, selects a whole LOD, and cleans up', () => {

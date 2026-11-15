@@ -63,6 +63,8 @@ export interface SurveyObject {
   isLOD?: boolean | undefined;
   castShadow?: boolean | undefined;
   visible?: boolean | undefined;
+  /** `userData.statsIgnore = true` leaves an object and its children out of the survey (helpers, gizmos). */
+  userData?: Record<string, unknown> | undefined;
   frustumCulled?: boolean | undefined;
   matrixAutoUpdate?: boolean | undefined;
   count?: number | undefined;
@@ -314,7 +316,15 @@ export function surveyScene(scene: InfoScene): SceneSurvey {
   // Objects that are not rendered: `visible = false`, or under such a parent (parents come first).
   const hiddenObjects = new Set<object>();
 
+  // Tools in the scene (a gizmo, a helper) flagged with userData.statsIgnore, and their children.
+  const ignored = new Set<object>();
+
   scene.traverse((object) => {
+    if (object.userData?.['statsIgnore'] === true || (object.parent !== null && object.parent !== undefined && ignored.has(object.parent))) {
+      ignored.add(object);
+      return;
+    }
+
     survey.objects++;
     const hidden = object.visible === false || (object.parent !== null && object.parent !== undefined && hiddenObjects.has(object.parent));
     if (hidden) hiddenObjects.add(object);

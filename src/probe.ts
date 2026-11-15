@@ -71,6 +71,11 @@ export function addProbe(stats: Stats, options: ProbeOptions): Probe {
   const gizmo = new TransformControls(camera, canvas);
   const helper = gizmo.getHelper();
   const raycaster = new Raycaster();
+  // The defaults (1 world unit) make points and lines catch every click near them.
+  raycaster.params.Points.threshold = 0.05;
+  raycaster.params.Line.threshold = 0.05;
+  // The gizmo is a tool, not part of the scene being measured.
+  helper.userData['statsIgnore'] = true;
   const pointer = new Vector2();
   const world = new Vector3();
   const eye = new Vector3();
@@ -91,7 +96,7 @@ export function addProbe(stats: Stats, options: ProbeOptions): Probe {
   const showRows = (): void => {
     const format = (value: number): string => value.toFixed(2);
     stats.addMetric({
-      id: ROWS[0], label: 'Picked object: its name, or its type when it has none. Click an object on the canvas to pick it.', place: 'top', plate: 'OBJ', width: 10,
+      id: ROWS[0], label: 'Picked object: its name, or its type when it has none. Click an object on the canvas to pick it.', place: 'top', plate: 'NAME', width: 10,
       read: () => (selected === null ? null : selected.id),
       format: () => (selected === null ? '' : (selected.name !== '' ? selected.name : selected.type).slice(0, 10))
     });
@@ -144,10 +149,15 @@ export function addProbe(stats: Stats, options: ProbeOptions): Probe {
     pointer.set(((event.clientX - box.left) / box.width) * 2 - 1, -((event.clientY - box.top) / box.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObject(scene, true);
-    for (let i = 0, l = hits.length; i < l; i++) {
-      if (inGizmo(hits[i].object) || !hits[i].object.visible) continue;
-      select(target(hits[i].object));
-      return;
+    // Surfaces first: a point cloud or a grid in front of a mesh is rarely what a click means.
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0, l = hits.length; i < l; i++) {
+        const object = hits[i].object;
+        const surface = (object as { isMesh?: boolean }).isMesh === true || (object as { isSprite?: boolean }).isSprite === true;
+        if (inGizmo(object) || !object.visible || (pass === 0 && !surface)) continue;
+        select(target(object));
+        return;
+      }
     }
 
     select(null);

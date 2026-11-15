@@ -136,6 +136,19 @@ describe('surveyScene on real three.js objects', () => {
     expect(survey.materials).toBe(2);
   });
 
+  it('leaves out objects flagged with userData.statsIgnore, and their children', () => {
+    const scene = new THREE.Scene();
+    const gizmo = new THREE.Group();
+    gizmo.userData['statsIgnore'] = true;
+    gizmo.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ transparent: true })), new THREE.PointLight());
+    scene.add(gizmo, new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()));
+    const survey = surveyScene(scene);
+    expect(survey.objects).toBe(2);
+    expect(survey.meshes).toBe(1);
+    expect(survey.transparent).toBe(0);
+    expect(survey.lights).toBe(0);
+  });
+
   it('estimates a huge BatchedMesh from a bounded sample instead of probing every id', () => {
     const scene = new THREE.Scene();
     const batched = new THREE.BatchedMesh(6000, 100, 300, new THREE.MeshBasicMaterial());

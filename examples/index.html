@@ -3,16 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stats overlay demo</title>
+  <title>three.ez stats — demo</title>
+  <meta name="description" content="A statistics overlay for three.js that reads like a camera's shooting display: frame timing, image scopes, diagnostics with advice, session reports and tools for agents.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     html, body { margin: 0; height: 100%; background: #050505; overflow: hidden; }
     canvas { display: block; width: 100vw; height: 100vh; }
+    /* Page chrome, top centre: the overlay owns the edges. */
+    nav { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; gap: 14px; font: 600 12px/1 'Barlow Condensed', sans-serif; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+    nav a, nav span { color: #f4f4f1; text-decoration: none; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 0 3px #000; }
+    nav a:hover, nav a:focus-visible { color: #f2cc1d; }
+    nav span { opacity: 0.7; }
+    @media (max-width: 720px) { nav { display: none; } }
   </style>
 </head>
 <body>
+  <nav aria-label="Pages">
+    <span>three.ez stats</span>
+    <a href="./showcase.html">Graph showcase</a>
+    <a href="?webgpu">WebGPU</a>
+    <a href="?heavy">Heavy scene</a>
+    <a href="https://github.com/luigidenora/stats">GitHub</a>
+  </nav>
   <script type="module" src="./main.ts"></script>
 </body>
 </html>

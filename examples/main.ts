@@ -1,4 +1,6 @@
+import { registerAgentTools } from '../src/agent.js';
 import { Stats } from '../src/index.js';
+import { addProbe } from '../src/probe.js';
 import { addLodMode, LodField } from './lod.js';
 
 type Three = typeof import('three');
@@ -58,6 +60,7 @@ function buildScene(THREE: Three) {
   const material = new THREE.MeshStandardMaterial({ map: checkerTexture(THREE), roughness: 0.8 });
   for (let i = 0; i < 12; i++) {
     const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), material);
+    box.name = `crate ${i + 1}`;
     box.position.set(Math.cos(i / 2) * 1.2, Math.sin(i * 1.3) * 0.8, Math.sin(i / 2) * 1.2);
     scene.add(box);
   }
@@ -90,11 +93,25 @@ async function main() {
 
   const stats = new Stats(renderer, {
     scene,
+    // The INFO Camera page and the depth precision check.
+    camera,
+    // Every finished recording (the REC plate in Performance mode) lands here.
+    onReport: (report) => {
+      console.table({ 'FPS average': report.fps.average, 'FPS 1% low': report.fps.low1, 'Frame P95 (ms)': report.frame.p95, 'Frame P99 (ms)': report.frame.p99, Dropped: report.dropped });
+    },
     // A custom metric uses the same mechanism as the built-in ones.
     metrics: [{ id: 'objects', label: 'Scene objects', place: 'top', plate: 'OBJ', read: () => scene.children.length }]
   });
   // A project-specific mode, defined outside the library (see lod.ts).
   addLodMode(stats, lodField);
+  // PROBE plate: click an object, drag the arrows, press C to copy its position.
+  const probe = addProbe(stats, { scene, camera, renderer });
+  // Offers the overlay to in-browser agents (WebMCP) where the browser supports it.
+  registerAgentTools(stats);
+  let wasNear = false;
+  // The motion stops while the probe is on, so objects hold still under the pointer.
+  let motion = 0;
+  let last = 0;
 
   addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight;
@@ -105,11 +122,18 @@ async function main() {
 
   void renderer.setAnimationLoop((time: number) => {
     stats.begin();
-    mesh.rotation.y = time * 0.00008;
-    scene.rotation.y = Math.sin(time * 0.0002) * 0.3;
+    if (!probe.active) motion += time - last;
+    last = time;
+    mesh.rotation.y = motion * 0.00008;
+    scene.rotation.y = Math.sin(motion * 0.0002) * 0.3;
     // Dolly in and out so LOD levels change.
-    camera.position.setLength(6 + Math.sin(time * 0.0004) * 4);
+    const swing = Math.sin(motion * 0.0004);
+    camera.position.setLength(6 + swing * 4);
     camera.lookAt(0, 0, 0);
+    // A flag on the graphs each time the camera comes closest: was that the hitch?
+    const near = swing < -0.98;
+    if (near && !wasNear) stats.event('closest');
+    wasNear = near;
     // Splits CPU time into 'logic' (above) and 'render' rows in Performance mode.
     stats.mark('render');
     renderer.render(scene, camera);
