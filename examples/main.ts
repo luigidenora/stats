@@ -1,5 +1,6 @@
 import { registerAgentTools } from '../src/agent.js';
 import { Stats } from '../src/index.js';
+import { addImageMode } from './image.js';
 import { addLodMode, LodField } from './lod.js';
 
 type Three = typeof import('three');
@@ -101,6 +102,8 @@ async function main() {
   });
   // A project-specific mode, defined outside the library (see lod.ts).
   addLodMode(stats, lodField);
+  // Another custom mode: the rendered image as a camera display reads it (see image.ts).
+  addImageMode(stats, renderer.domElement);
   // Offers the overlay to in-browser agents (WebMCP) where the browser supports it.
   registerAgentTools(stats);
   let wasNear = false;

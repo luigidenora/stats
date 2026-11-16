@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ImageSampler } from '../examples/image-sampler.js';
+import { IMAGE_HEIGHT, IMAGE_WIDTH, ImageSampler, ZEBRA_LEVEL, zebraMask } from '../examples/image-sampler.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -37,7 +37,7 @@ describe('ImageSampler', () => {
     expect(sampler.red[255]).toBe(sampler.red[0]);
     expect(sampler.clippedHigh).toBeCloseTo(0.5);
     expect(sampler.clippedLow).toBeCloseTo(0.5);
-    expect(sampler.luma[255] + sampler.luma[0]).toBe(256 * 144);
+    expect(sampler.green[255] + sampler.green[0]).toBe(256 * 144);
   });
 
   it('ignores fully transparent pixels instead of counting them as crushed blacks', () => {
@@ -69,5 +69,25 @@ describe('ImageSampler', () => {
     });
     expect(sampler.capture(source())).toBe(false);
     expect(sampler.valid).toBe(false);
+  });
+});
+
+describe('zebraMask', () => {
+  it('stripes only the clipped, opaque pixels and counts them', () => {
+    const pixels = new Uint8ClampedArray(IMAGE_WIDTH * IMAGE_HEIGHT * 4);
+    // First row: clipped white. Second row: just under the level. Third: clipped but transparent.
+    for (let x = 0; x < IMAGE_WIDTH; x++) {
+      pixels.set([255, 255, 255, 255], x * 4);
+      pixels.set([ZEBRA_LEVEL - 1, 10, 10, 255], (IMAGE_WIDTH + x) * 4);
+      pixels.set([255, 255, 255, 0], (IMAGE_WIDTH * 2 + x) * 4);
+    }
+
+    const out = new Uint8ClampedArray(pixels.length).fill(9);
+    expect(zebraMask(pixels, out, 0)).toBe(IMAGE_WIDTH);
+    expect([out[0], out[4], out[8], out[12]]).toEqual([0, 0, 244, 244]);
+    expect(out[IMAGE_WIDTH * 4 + 3]).toBe(0);
+    expect(out[IMAGE_WIDTH * 2 * 4 + 3]).toBe(0);
+    zebraMask(pixels, out, 2);
+    expect(out[0]).toBe(244);
   });
 });
