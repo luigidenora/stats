@@ -106,12 +106,10 @@ spawnWave();
 stats.event(); // a flag above the frame graph: what was the app doing when a frame hitched?
 ```
 
-## Controls from code, and helpers in the scene
+## Controls from code
 
-- `stats.setControl(id, active)` sets a toggle plate as a click would; `stats.removeControl(id)`
-  removes it.
-- An object with `userData.statsIgnore = true` is left out of the scene survey, with its
-  children. Flag gizmos and helpers your plugin adds to the scene.
+`stats.setControl(id, active)` sets a toggle plate as a click would; `stats.removeControl(id)`
+removes it.
 
 ## Plugins in production
 

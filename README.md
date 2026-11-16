@@ -195,7 +195,6 @@ edges inside the safe area.
 - **GPU time**: WebGL needs `EXT_disjoint_timer_query_webgl2` (Chromium on desktop); WebGPU needs
   `trackTimestamp: true`. Elsewhere the readout is "—" and the dial is dashed.
 - **JS heap**: Chromium only (`performance.memory`).
-- **Byte sizes** in the scene survey are estimates from dimensions and arrays.
 
 ## Develop
 
