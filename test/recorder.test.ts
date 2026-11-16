@@ -61,16 +61,13 @@ describe('Recorder', () => {
     expect(recorder.finish(MEMORY, CONTEXT)?.gpu).toEqual({ average: 6, worst: 8 });
   });
 
-  it('timestamps events in recorded seconds and collects the diagnostics seen', () => {
+  it('timestamps events in recorded seconds', () => {
     const recorder = new Recorder(MEMORY);
     recorder.event('start');
     for (let i = 0; i < 100; i++) recorder.frame(10, 1, 1, 1);
     recorder.event('boss');
-    recorder.findings(['stutter']);
-    recorder.findings(['stutter', 'draw-calls']);
     const report = recorder.finish(MEMORY, CONTEXT);
     expect(report?.events).toEqual([{ name: 'start', at: 0 }, { name: 'boss', at: 1 }]);
-    expect(report?.findings).toEqual(['stutter', 'draw-calls']);
   });
 
   it('grows past its first buffer and reports full at the cap', () => {

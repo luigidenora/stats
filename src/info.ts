@@ -8,7 +8,6 @@
 
 import { PROFILE_BUDGETS, type Budgets } from './budgets.js';
 import { focalLength35, type InfoCamera } from './camera.js';
-import type { Diagnostics } from './diagnostics.js';
 import { formatBytes, formatCount } from './format.js';
 import type { BackendKind, StatsRenderer } from './sampler.js';
 import type { SceneSurvey } from './scene-survey.js';
@@ -177,33 +176,12 @@ function cameraPage(camera: InfoCamera | null | undefined): InfoPage {
   };
 }
 
-function diagnosticsPage(diagnostics: Diagnostics | null): InfoPage {
-  if (diagnostics === null) return { title: 'Diagnostics', rows: [{ key: 'Checks', value: 'Off' }] };
-  const report = diagnostics.report();
-  let warnings = 0;
-  for (let i = 0, l = report.length; i < l; i++) if (report[i].status === 'warn') warnings++;
-  const rows: InfoRow[] = [{ key: 'Checks', value: `${report.length}, ${warnings} to look at`, warn: warnings > 0 }];
-  // Warnings first, then the rest, as many as fit.
-  for (let pass = 0; pass < 2; pass++) {
-    for (let i = 0, l = report.length; i < l && rows.length < MAX_ROWS; i++) {
-      const entry = report[i];
-      if ((entry.status === 'warn') !== (pass === 0)) continue;
-      rows.push({ key: entry.title, value: entry.status === 'warn' ? 'Look' : entry.status === 'ok' ? 'OK' : NONE, warn: entry.status === 'warn' });
-    }
-  }
-
-  if (report.length + 1 > MAX_ROWS) rows.push({ key: '', value: `+${report.length + 1 - MAX_ROWS}` });
-
-  return { title: 'Diagnostics', rows };
-}
-
-export const INFO_PAGES = 6;
+export const INFO_PAGES = 5;
 
 /** What the pages read besides the renderer. */
 export interface PageSources {
   /** The shared scene survey: undefined without a scene, null when the scene could not be read. */
   survey?: () => SceneSurvey | null | undefined;
-  diagnostics?: Diagnostics | null;
   camera?: () => InfoCamera | null;
   /** Limits for the yellow rows; the desktop profile by default. */
   budgets?: Budgets;
@@ -217,7 +195,6 @@ export function buildPage(index: number, renderer: StatsRenderer, backend: Backe
     case 1: return limitsPage(renderer);
     case 2: return programsPage(renderer);
     case 3: return scenePage(sources.survey?.(), budgets);
-    case 4: return cameraPage(sources.camera?.());
-    default: return diagnosticsPage(sources.diagnostics ?? null);
+    default: return cameraPage(sources.camera?.());
   }
 }

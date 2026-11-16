@@ -1,36 +1,8 @@
-/** Shared fixtures for the tests: a diagnostic context, an empty scene survey and a fake renderer. */
+/** Shared fixtures for the tests: a fake renderer, a Canvas 2D stub and small assertions. */
 
-import { PROFILE_BUDGETS } from '../src/budgets.js';
-import type { DiagnosticContext } from '../src/diagnostics.js';
 import type { StatsRenderer } from '../src/sampler.js';
-import type { SceneSurvey } from '../src/scene-survey.js';
 
 export const BUDGET = 1000 / 60;
-
-/** A healthy 60 fps desktop frame; override what a test needs. */
-export function makeContext(overrides: Partial<DiagnosticContext> = {}): DiagnosticContext {
-  return {
-    budget: BUDGET, budgets: { ...PROFILE_BUDGETS.desktop }, profile: 'desktop', uptime: 60,
-    fps: 60, cpu: 4, gpu: 5, p95: 17, dropped: 0, jitter: 0.5, blocking: 0,
-    calls: 100, triangles: 100_000, lines: 0, points: 0, passes: 1, programs: 4, recentPrograms: 0,
-    geometryGrowth: 0, textureGrowth: 0, gcRate: 0, pixelRatio: 1,
-    bufferPixels: 1920 * 1080, displayPixels: 1920 * 1080, contextLost: 0, camera: null, robustDepth: false, shadowMapEnabled: true, scene: null,
-    ...overrides
-  };
-}
-
-/** A survey of an empty scene; override what a test needs. */
-export function makeSurvey(overrides: Partial<SceneSurvey> = {}): SceneSurvey {
-  return {
-    objects: 0, meshes: 0, instancedMeshes: 0, instances: 0, batchedMeshes: 0, batchedFill: null, lods: 0,
-    triangles: 0, vertices: 0, trianglesPerMesh: [], geometries: 0, nonIndexedGeometries: 0, geometryBytes: 0, topGeometries: [],
-    textures: 0, textureBytes: 0, compressedTextures: 0, largeUncompressed: 0, missingMips: 0, textureSides: [], topTextures: [],
-    lightsByType: new Map(), lights: 0, shadowLights: 0, pointShadows: 0, largestShadowMap: 0, shadowBytes: 0,
-    materialsByType: new Map(), materials: 0, transparent: 0, transparentDepthWrite: 0, doubleSided: 0,
-    instancingGroups: 0, largestInstancingGroup: 0, frustumCulledOff: 0, matrixAutoUpdate: 0, maxBones: 0, morphMeshes: 0,
-    ...overrides
-  };
-}
 
 export interface FakeRenderer extends StatsRenderer {
   info: StatsRenderer['info'] & { resets: number };

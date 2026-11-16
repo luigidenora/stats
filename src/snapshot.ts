@@ -5,7 +5,6 @@
  */
 
 import type { Budgets, DeviceProfile } from './budgets.js';
-import type { ActiveFinding } from './diagnostics.js';
 import type { FramePacing } from './frame-stats.js';
 import type { Pressure } from './pressure.js';
 import type { StatsReport } from './recorder.js';
@@ -22,7 +21,7 @@ export interface SceneSummary extends Omit<SceneSurvey, 'lightsByType' | 'materi
 
 export interface StatsSnapshot {
   /** Schema version of this object. */
-  version: 1;
+  version: 2;
   mode: string;
   backend: BackendKind;
   profile: DeviceProfile;
@@ -37,10 +36,6 @@ export interface StatsSnapshot {
   counters: { calls: number; triangles: number; points: number; lines: number; geometries: number; textures: number; programs: number | null; passes: number | null };
   canvas: { width: number; height: number; cssWidth: number; cssHeight: number; pixelRatio: number | null };
   pressure: Pressure;
-  /** What is wrong right now, each with its numbers and one practical fix. */
-  findings: ActiveFinding[];
-  /** Every check and its state. */
-  checks: { id: string; title: string; status: 'ok' | 'warn' | 'unchecked' }[];
   /** Scene survey (needs `scene`); byte sizes are estimates. */
   scene: SceneSummary | null;
   camera: { type: string; fov: number | null; near: number; far: number; position: [number, number, number] } | null;

@@ -40,9 +40,9 @@ export function agentTools(stats: Stats): AgentTool[] {
   return [
     {
       name: 'three_stats_snapshot',
-      description: 'Current performance of the three.js scene as JSON: frame rate, CPU and GPU ms per frame, frame pacing (P95, dropped refreshes), '
-        + 'draw calls, triangles, memory counters, the scene survey (lights, shadows, textures, instancing candidates) and `findings`: what is wrong '
-        + 'right now, each with its numbers and one practical fix. Call it first, fix the top finding, then call it again.',
+      description: 'Current performance of the three.js scene as JSON: frame rate, CPU and GPU ms per frame, frame pacing (P95, worst frame, dropped '
+        + 'refreshes), draw calls, triangles, memory counters, the budgets of the device profile and the scene survey (meshes, instances, lights, '
+        + 'shadows, materials, estimated texture and geometry bytes, instancing candidates). Call it before and after a change.',
       inputSchema: { type: 'object', properties: {} },
       run: async (): Promise<StatsSnapshot> => Promise.resolve(stats.snapshot())
     },

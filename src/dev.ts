@@ -11,4 +11,3 @@ export type { StatsMode, StatsMetric, GraphDefinition, DistributionDefinition, M
 export type { StatsReport } from './recorder.js';
 export type { StatsSnapshot } from './snapshot.js';
 export type { Pressure } from './pressure.js';
-export type { DiagnosticRule, ActiveFinding } from './diagnostics.js';

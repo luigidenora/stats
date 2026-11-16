@@ -12,7 +12,7 @@ export default defineConfig({
     sourcemap: true,
     lib: {
       // One file per public entry (see "exports" in package.json); shared code goes into chunks.
-      entry: { index: 'src/index.ts', dev: 'src/dev.ts', noop: 'src/noop.ts', agent: 'src/agent.ts', probe: 'src/probe.ts' },
+      entry: { index: 'src/index.ts', dev: 'src/dev.ts', noop: 'src/noop.ts', agent: 'src/agent.ts' },
       formats: ['es'],
       fileName: (_format, name) => `${name}.js`
     },

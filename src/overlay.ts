@@ -1,6 +1,5 @@
 import { checkControl, Toggle } from './controls.js';
 import { checkDistribution, checkGraph, checkHistogram, checkMetric, safeFormat, customGraphPanel, distributionPanel, finite, graphPanel, safeRead, warnOnce, type Panel } from './custom.js';
-import type { ActiveFinding } from './diagnostics.js';
 import { HISTOGRAM_WIDTH, histogramPanel, imageHistogramPanel, type HistogramPanel } from './histogram-panel.js';
 import { vectorscopePanel, waveformPanel, zebraMask } from './scopes.js';
 import { IMAGE_HEIGHT, IMAGE_WIDTH, ImageSampler } from './image.js';
@@ -90,8 +89,6 @@ export class Overlay {
   private readonly _toggles: Toggle[] = [];
   private readonly _rows = el('div', 'tez-c tez-c-rows tez-rows');
   /** TIP plate, first of the top-right rows: shown only while diagnostics have findings. */
-  private readonly _tips = el('span', 'tez-row tez-tips');
-  private _findings = 0;
   private readonly _counters = el('div', 'tez-c tez-c-counters');
   private readonly _grid = el('div', 'tez-grid');
   /** FPS, CPU, GPU and heap on one row, top-left. */
@@ -201,8 +198,6 @@ export class Overlay {
         })
       : null;
 
-    this._tips.hidden = true;
-    this._rows.append(this._tips);
     this._plates.append(this._backend);
     if (this._control !== null) this._plates.append(this._control.element);
     this._counters.append(this._grid);
@@ -399,30 +394,6 @@ export class Overlay {
     }
   }
 
-  /** Shows the TIP plate with the active diagnostics, or hides it when there are none. */
-  public setFindings(findings: readonly ActiveFinding[]): void {
-    const before = this._findings;
-    this._findings = findings.length;
-    if (findings.length > 0) {
-      if (findings.length !== before) {
-        const plate = createPlate(`TIP ${findings.length}`);
-        plate.classList.add('tez-plate-alert');
-        this._tips.replaceChildren(plate);
-      }
-
-      const sections: { title: string; text: string; advice: string }[] = [];
-      for (let i = 0, l = findings.length; i < l; i++) sections.push({ title: findings[i].title, text: findings[i].message, advice: findings[i].advice });
-      setTip(this._tips, {
-        title: findings.length === 1 ? '1 thing to look at' : `${findings.length} things to look at`,
-        sections,
-        text: 'Checks on what the overlay measures, against the device profile budgets. INFO lists every check.'
-      });
-    }
-
-    this.applyMode();
-    if ((before > 0) !== (findings.length > 0) && this.root.isConnected) this.layout();
-  }
-
   /** Feeds the Mesh and Memory graphs from the renderer, independently of the counter rows on screen. */
   public setCounters(counters: Record<'calls' | 'triangles' | 'geometries' | 'textures', () => number>): void {
     this._counterReads = counters;
@@ -604,7 +575,6 @@ export class Overlay {
     this.root.classList.toggle('tez-off', this._mode === 'off');
     this._zebra.hidden = !(this._zebraOn && this._mode === 'image');
     this._guides.hidden = !(this._guidesOn && this._mode === 'image');
-    this._tips.hidden = this._mode === 'off' || this._findings === 0;
     this.root.classList.toggle('tez-info', this._mode === 'info');
     this.root.dataset['mode'] = this._mode;
     if (this._info !== null) {
@@ -633,7 +603,7 @@ export class Overlay {
    * panels of every mode (built-in and custom), so a component added later animates like the rest.
    */
   private animated(): HTMLElement[] {
-    const elements: HTMLElement[] = [this._band, this._counters, this._backend, this._tips];
+    const elements: HTMLElement[] = [this._band, this._counters, this._backend];
     for (let i = 0, l = this._toggles.length; i < l; i++) elements.push(this._toggles[i].element);
     for (let i = 0, l = this._slots.length; i < l; i++) {
       if (this._slots[i].metric.place === 'top') elements.push(this._slots[i].element);

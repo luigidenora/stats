@@ -42,8 +42,6 @@ export interface StatsReport {
   memory: { start: MemoryCounters; end: MemoryCounters };
   /** Named events (see `stats.event()`), with their time in seconds from the start. */
   events: { name: string; at: number }[];
-  /** Ids of the diagnostics that were active at some point. */
-  findings: string[];
   /** Frame budget in ms, device profile and backend the numbers belong to. */
   budget: number;
   profile: DeviceProfile;
@@ -73,7 +71,6 @@ export class Recorder {
   private _trianglesSum = 0;
   private _trianglesMax = 0;
   private readonly _events: { name: string; at: number }[] = [];
-  private readonly _findings = new Set<string>();
 
   constructor(private readonly _start: MemoryCounters) {}
 
@@ -110,10 +107,6 @@ export class Recorder {
     if (this._events.length < 1000) this._events.push({ name, at: this._elapsed / 1000 });
   }
 
-  public findings(ids: readonly string[]): void {
-    for (let i = 0, l = ids.length; i < l; i++) this._findings.add(ids[i]);
-  }
-
   /** The report of what was recorded, or null when no frame was. */
   public finish(end: MemoryCounters, context: ReportContext): StatsReport | null {
     const frames = this._frames;
@@ -144,7 +137,6 @@ export class Recorder {
       triangles: { average: this._trianglesSum / frames, max: this._trianglesMax },
       memory: { start: this._start, end },
       events: this._events.slice(),
-      findings: Array.from(this._findings),
       budget: context.budget,
       profile: context.profile,
       backend: context.backend

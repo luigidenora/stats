@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { Diagnostics } from '../src/diagnostics.js';
 import { buildPage, INFO_PAGES, type InfoPage } from '../src/info.js';
 import type { StatsRenderer } from '../src/sampler.js';
 import { surveyScene } from '../src/scene-survey.js';
-import { fakeRenderer, makeContext } from './helpers.js';
+import { fakeRenderer } from './helpers.js';
 
 function value(page: InfoPage, key: string): string | undefined {
   return page.rows.find((row) => row.key === key)?.value;
@@ -29,7 +28,7 @@ describe('INFO pages', () => {
     const renderer = glRenderer();
     const titles = [];
     for (let i = 0; i < INFO_PAGES + 1; i++) titles.push(buildPage(i, renderer, 'webgl').title);
-    expect(titles).toEqual(['Renderer', 'Limits', 'Programs', 'Scene', 'Camera', 'Diagnostics', 'Renderer']);
+    expect(titles).toEqual(['Renderer', 'Limits', 'Programs', 'Scene', 'Camera', 'Renderer']);
   });
 
   it('describes the WebGL renderer and flags suspicious settings', () => {
@@ -103,20 +102,5 @@ describe('INFO pages', () => {
     expect(value(page, 'Focal (35 mm eq.)')).toBe('33 mm');
     expect(value(page, 'Position')).toBe('0.00, 1.50, 250');
     expect(page.rows.find((row) => row.key === 'Far / near')?.warn).toBe(true);
-  });
-
-  it('lists the diagnostics, warnings first', () => {
-    expect(value(buildPage(5, glRenderer(), 'webgl'), 'Checks')).toBe('Off');
-    const diagnostics = new Diagnostics([
-      { id: 'fine', title: 'Fine', check: () => null },
-      { id: 'bad', title: 'Bad', check: () => ({ message: 'x', advice: 'y' }) },
-      { id: 'later', title: 'Later', scope: 'scene', check: () => null }
-    ]);
-    diagnostics.evaluate(makeContext(), 'frame');
-    diagnostics.evaluate(makeContext(), 'frame');
-    const page = buildPage(5, glRenderer(), 'webgl', { diagnostics });
-    expect(page.rows.map((row) => [row.key, row.value, row.warn])).toEqual([
-      ['Checks', '3, 1 to look at', true], ['Bad', 'Look', true], ['Fine', 'OK', false], ['Later', '—', false]
-    ]);
   });
 });

@@ -1,7 +1,7 @@
 {
   "name": "@three.ez/stats",
   "version": "1.0.0",
-  "description": "Statistics overlay for three.js, WebGL and WebGPU: frame timing, GPU time, renderer counters, memory, image scopes, diagnostics with advice, session reports and tools for agents.",
+  "description": "Statistics overlay for three.js, WebGL and WebGPU: frame timing, GPU time, frame pacing, renderer counters, memory, session reports and tools for agents.",
   "author": "Luigi Denora (https://github.com/luigidenora)",
   "license": "MIT",
   "type": "module",
@@ -20,10 +20,6 @@
     "./agent": {
       "types": "./build/types/agent.d.ts",
       "import": "./build/agent.js"
-    },
-    "./probe": {
-      "types": "./build/types/probe.d.ts",
-      "import": "./build/probe.js"
     },
     "./package.json": "./package.json"
   },
@@ -53,9 +49,6 @@
     "webgl",
     "webgpu",
     "fps",
-    "diagnostics",
-    "histogram",
-    "vectorscope",
     "mcp",
     "agent"
   ],

@@ -2,12 +2,9 @@ import { resolveBudgets, type Budgets, type DeviceProfile } from './budgets.js';
 import type { InfoCamera } from './camera.js';
 import { CanvasFit } from './canvas-fit.js';
 import { warnOnce } from './custom.js';
-import { Diagnostics, type ActiveFinding, type DiagnosticContext, type DiagnosticRule } from './diagnostics.js';
 import { formatCount, formatInt, formatMs, type Threshold } from './format.js';
 import { FrameStats, type FramePacing } from './frame-stats.js';
-import { HealthMonitor } from './health.js';
 import { buildPage, INFO_PAGES } from './info.js';
-import { FRAME_RULES, SCENE_RULES } from './rules.js';
 import { surveyScene, type InfoScene, type SceneSurvey } from './scene-survey.js';
 import { findMode, MODES } from './modes.js';
 import { PressureMonitor, type Pressure } from './pressure.js';
@@ -18,9 +15,9 @@ import type { ControlDefinition, ModeContent, ModeDefinition, StatsMetric, Stats
 import { FIRST_SEGMENT, FrameSampler, type StatsRenderer } from './sampler.js';
 
 const STORAGE_KEY = 'tez-stats-mode';
-/** Frame diagnostics run once a second; the scene survey at most every 5 s (2 s while INFO shows it). */
-const DIAGNOSE_MS = 1000;
-const SURVEY_MS = 5000;
+/** The pressure signal is sampled once a second. */
+const PRESSURE_MS = 1000;
+/** A cached scene survey is reused for this long. */
 const SURVEY_FRESH_MS = 2000;
 /** A survey waits at least this many times its own duration: at most 0.4% of the time, however large the scene. */
 const SURVEY_COST_FACTOR = 250;
@@ -60,8 +57,6 @@ export interface StatsOptions {
   profile?: 'auto' | DeviceProfile;
   /** Overrides single budgets of the profile, e.g. `{ calls: 500 }`. */
   budgets?: Partial<Budgets>;
-  /** Diagnostics: false turns them all off (no TIP plate), a list turns off those rule ids. Default: all on. */
-  rules?: false | readonly string[];
   /** Camera for the INFO Camera page and the depth precision check. Optional. */
   camera?: InfoCamera;
   /**
@@ -111,15 +106,11 @@ export class Stats {
   private readonly _pacing = new FrameStats();
   private readonly _profile: DeviceProfile;
   private readonly _budgets: Budgets;
-  /** Null when `rules: false`. */
-  private readonly _diagnostics: Diagnostics | null;
-  private readonly _health: HealthMonitor | null;
-  private _lastDiagnose = 0;
-  private _lastSurvey = -Infinity;
+  private _lastPressure = 0;
   /** When the cached survey was taken; -Infinity when there is none. */
   private _surveyedAt = -Infinity;
   private _survey: SceneSurvey | null = null;
-  /** Values of the last refresh, read by the once-a-second diagnostics. */
+  /** Values of the last refresh, read by the pressure signal and the snapshot. */
   private _lastFrame: { fps: number | null; cpu: number | null; gpu: number | null; heap: number | null } = { fps: null, cpu: null, gpu: null, heap: null };
   /** Pacing of the last refresh, read by the p95 / worst / dropped rows. */
   private _pacingSummary: FramePacing | null = null;
@@ -168,9 +159,6 @@ export class Stats {
     const resolved = resolveBudgets(options.profile ?? 'auto', options.budgets);
     this._profile = resolved.profile;
     this._budgets = resolved.budgets;
-    const rules = options.rules ?? [];
-    this._diagnostics = rules === false ? null : new Diagnostics([...FRAME_RULES, ...SCENE_RULES], rules);
-    this._health = rules === false ? null : new HealthMonitor(renderer.domElement);
     this._fit = new CanvasFit(renderer.domElement);
     const stored = this._remember ? storedMode() : null;
     const builtin = stored !== null && findMode(MODES, stored) !== null;
@@ -197,7 +185,6 @@ export class Stats {
     this._scene = options.scene ?? null;
     this._overlay.setInfoSource(INFO_PAGES, (index) => buildPage(index, renderer, this._sampler.backend, {
       survey: () => (this._scene === null ? undefined : this.survey(performance.now(), SURVEY_FRESH_MS)),
-      diagnostics: this._diagnostics,
       budgets: this._budgets,
       camera: () => this._camera
     }));
@@ -326,7 +313,7 @@ export class Stats {
 
   /**
    * Starts recording every frame for a report: averages, percentiles, the 1% low frame rate,
-   * dropped refreshes, counters, memory, events and the diagnostics that fired. The REC plate
+   * dropped refreshes, counters, memory and events. The REC plate
    * (Performance mode) does the same.
    */
   public startRecording(): this {
@@ -366,7 +353,7 @@ export class Stats {
 
   /**
    * Everything the overlay knows right now as plain JSON: frame values, pacing, counters, the
-   * active findings with their advice, the scene survey, the camera and the last report. Made for
+   * scene survey, the camera and the last report. Made for
    * agents, tests and bug reports; cheap, but it may survey the scene, so call it on demand, not
    * per frame.
    */
@@ -375,9 +362,8 @@ export class Stats {
     const canvas = this._renderer.domElement;
     const camera = this._camera;
     const survey = this._scene === null ? null : this.survey(performance.now(), SURVEY_FRESH_MS);
-    const checks = this._diagnostics?.report() ?? [];
     return {
-      version: 1,
+      version: 2,
       mode: this._overlay.mode,
       backend: sampler.backend,
       profile: this._profile,
@@ -391,8 +377,6 @@ export class Stats {
       },
       canvas: { width: canvas.width, height: canvas.height, cssWidth: canvas.clientWidth, cssHeight: canvas.clientHeight, pixelRatio: this._renderer.getPixelRatio?.() ?? null },
       pressure: this._pressure.level,
-      findings: this.findings,
-      checks: checkStates(checks),
       scene: survey === null ? null : summariseScene(survey),
       camera: camera === null
         ? null
@@ -400,29 +384,6 @@ export class Stats {
       recording: this.recording,
       report: this._report
     };
-  }
-
-  /** Diagnostics shown on the TIP plate right now. Empty with `rules: false`. */
-  public get findings(): ActiveFinding[] { return this._diagnostics?.findings() ?? []; }
-
-  /**
-   * Adds a diagnostic rule (one with the same id replaces it). Frame rules run once a second;
-   * scene rules (`scope: 'scene'`) on the scene survey, every 5 s. Ignored with `rules: false`.
-   *
-   * ```ts
-   * stats.addRule({
-   *   id: 'bodies', title: 'Too many bodies',
-   *   check: () => (world.bodies.length > 500 ? { message: `${world.bodies.length} bodies.`, advice: 'Sleep bodies at rest.' } : null)
-   * });
-   * ```
-   */
-  public addRule(rule: DiagnosticRule): this {
-    const diagnostics = this._diagnostics;
-    if (diagnostics === null) return this;
-    const before = diagnostics.findings().length;
-    // A replaced rule takes its active finding with it: the TIP plate must follow.
-    if (diagnostics.add(rule) && diagnostics.findings().length !== before) this._overlay.setFindings(diagnostics.findings());
-    return this;
   }
 
   /** The overlay element, for custom placement or styling. */
@@ -444,15 +405,13 @@ export class Stats {
       if (recorder.full) this.stopRecording();
     }
 
-    if (this._sampler.compiled) this._health?.compiled();
-
     const now = performance.now();
     if (this._holdRefresh) {
       this._holdRefresh = false;
       this._lastRefresh = now;
     }
 
-    // Reads, rules and scenes are guarded one by one; this net is for whatever they miss. The
+    // Reads and scenes are guarded one by one; this net is for whatever they miss. The
     // overlay must never throw into the app's frame callback.
     try {
       if (now - this._lastRefresh >= this._interval) {
@@ -463,11 +422,10 @@ export class Stats {
         this._overlay.refresh(this._lastFrame, this._budget, this._thresholds);
       }
 
-      // Once a second whatever the refresh interval: the health trends count samples as seconds.
-      if (now - this._lastDiagnose >= DIAGNOSE_MS) {
-        this._lastDiagnose = now;
+      // Once a second whatever the refresh interval: the pressure streaks count samples as seconds.
+      if (now - this._lastPressure >= PRESSURE_MS) {
+        this._lastPressure = now;
         this.signalPressure();
-        this.diagnose(now);
       }
     } catch (error) {
       warnOnce(`a refresh failed and was skipped (${String(error)}).`);
@@ -526,12 +484,11 @@ export class Stats {
     return this;
   }
 
-  /** Scene for the INFO mode's scene summary and the scene diagnostics. */
+  /** Scene for the INFO mode's scene summary and the snapshot. */
   public set scene(scene: InfoScene | null) {
     this._scene = scene;
     this._survey = null;
     this._surveyedAt = -Infinity;
-    this._lastSurvey = -Infinity;
   }
 
   /** Camera for the INFO Camera page and the depth precision check. */
@@ -546,7 +503,6 @@ export class Stats {
     window.removeEventListener('resize', this._onLayout);
     window.removeEventListener('scroll', this._onLayout, { capture: true });
     document.removeEventListener('visibilitychange', this._onVisibility);
-    this._health?.dispose();
     this._sampler.dispose();
     this._overlay.dispose();
     if (this._exposed) {
@@ -608,7 +564,6 @@ export class Stats {
     };
   }
 
-  /** Once a second: health samples, frame rules and, every 5 s with a scene, scene rules. */
   /**
    * The shared scene survey, retaken when older than `maxAge`. Null without a scene or when the
    * scene cannot be traversed right now (e.g. mid-teardown): a survey must never break a frame.
@@ -622,55 +577,13 @@ export class Stats {
     try {
       this._survey = surveyScene(this._scene);
     } catch (error) {
-      warnOnce(`the scene could not be surveyed (${String(error)}); scene pages and checks wait for the next try.`);
+      warnOnce(`the scene could not be surveyed (${String(error)}); the next try comes later.`);
       this._survey = null;
     }
 
     this._surveyCost = performance.now() - started;
 
     return this._survey;
-  }
-
-  private diagnose(now: number): void {
-    const diagnostics = this._diagnostics;
-    const health = this._health;
-    if (diagnostics === null || health === null) return;
-    const frame = this._lastFrame;
-    const sampler = this._sampler;
-    health.sample(sampler.geometries, sampler.textures, frame.heap);
-    const canvas = this._renderer.domElement;
-    const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
-    const pacing = this._pacingSummary;
-    const context: DiagnosticContext = {
-      budget: this._budget, budgets: this._budgets, profile: this._profile, uptime: health.uptime,
-      fps: frame.fps, cpu: frame.cpu, gpu: frame.gpu,
-      p95: pacing?.p95 ?? null, dropped: pacing?.dropped ?? null, jitter: pacing?.jitter ?? null,
-      blocking: health.blocking, calls: sampler.calls, triangles: sampler.triangles, lines: sampler.lines, points: sampler.points, passes: sampler.passes,
-      programs: sampler.programs, recentPrograms: health.recentPrograms,
-      geometryGrowth: health.geometryGrowth, textureGrowth: health.textureGrowth, gcRate: health.gcRate,
-      pixelRatio: this._renderer.getPixelRatio?.() ?? null,
-      bufferPixels: canvas.width * canvas.height,
-      displayPixels: canvas.clientWidth * canvas.clientHeight * dpr * dpr,
-      contextLost: health.contextLost,
-      camera: this._camera === null ? null : { near: this._camera.near, far: this._camera.far, perspective: this._camera.isPerspectiveCamera === true },
-      robustDepth: robustDepth(this._renderer),
-      shadowMapEnabled: this._renderer.shadowMap?.enabled ?? null,
-      scene: null
-    };
-
-    let changed = diagnostics.evaluate(context, 'frame');
-    if (now - this._lastSurvey >= SURVEY_MS) {
-      this._lastSurvey = now;
-      changed = diagnostics.evaluate({ ...context, scene: this.survey(now, SURVEY_MS) }, 'scene') || changed;
-    }
-
-    const findings = diagnostics.findings();
-    if (changed) this._overlay.setFindings(findings);
-    if (this._recorder !== null && findings.length > 0) {
-      const ids: string[] = [];
-      for (let i = 0, l = findings.length; i < l; i++) ids.push(findings[i].id);
-      this._recorder.findings(ids);
-    }
   }
 
   /**
@@ -699,29 +612,11 @@ export class Stats {
   }
 }
 
-function checkStates(checks: readonly { id: string; title: string; status: 'ok' | 'warn' | 'unchecked' }[]): StatsSnapshot['checks'] {
-  const out: StatsSnapshot['checks'] = [];
-  for (let i = 0, l = checks.length; i < l; i++) out.push({ id: checks[i].id, title: checks[i].title, status: checks[i].status });
-  return out;
-}
-
 /** The global array of live instances (created on first use). */
 function liveInstances(): Stats[] {
   const scope = globalThis as unknown as Record<string, Stats[] | undefined>;
   scope[GLOBAL_HOOK] ??= [];
   return scope[GLOBAL_HOOK];
-}
-
-/** A logarithmic or reversed depth buffer keeps precision over wide depth ranges. */
-function robustDepth(renderer: StatsRenderer): boolean {
-  const flags = renderer as { capabilities?: DepthFlags; logarithmicDepthBuffer?: boolean; reversedDepthBuffer?: boolean };
-  const capabilities = flags.capabilities ?? {};
-  return capabilities.logarithmicDepthBuffer === true || capabilities.reversedDepthBuffer === true || flags.logarithmicDepthBuffer === true || flags.reversedDepthBuffer === true;
-}
-
-interface DepthFlags {
-  logarithmicDepthBuffer?: boolean;
-  reversedDepthBuffer?: boolean;
 }
 
 /** The mode remembered from an earlier visit, if storage is available. */

@@ -1,6 +1,5 @@
 import { registerAgentTools } from '../src/agent.js';
 import { Stats } from '../src/index.js';
-import { addProbe } from '../src/probe.js';
 import { addLodMode, LodField } from './lod.js';
 
 type Three = typeof import('three');
@@ -104,12 +103,9 @@ async function main() {
   });
   // A project-specific mode, defined outside the library (see lod.ts).
   addLodMode(stats, lodField);
-  // PROBE plate: click an object, drag the arrows, press C to copy its position.
-  const probe = addProbe(stats, { scene, camera, renderer });
   // Offers the overlay to in-browser agents (WebMCP) where the browser supports it.
   registerAgentTools(stats);
   let wasNear = false;
-  // The motion stops while the probe is on, so objects hold still under the pointer.
   let motion = 0;
   let last = 0;
 
@@ -122,7 +118,7 @@ async function main() {
 
   void renderer.setAnimationLoop((time: number) => {
     stats.begin();
-    if (!probe.active) motion += time - last;
+    motion += time - last;
     last = time;
     mesh.rotation.y = motion * 0.00008;
     scene.rotation.y = Math.sin(motion * 0.0002) * 0.3;

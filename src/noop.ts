@@ -4,7 +4,6 @@
  */
 
 import type { Budgets, DeviceProfile } from './budgets.js';
-import type { ActiveFinding } from './diagnostics.js';
 import type { Pressure } from './pressure.js';
 import type { StatsReport } from './recorder.js';
 import type { StatsSnapshot } from './snapshot.js';
@@ -29,7 +28,6 @@ class NoopStats implements PublicKeys {
   public get pressure(): Pressure { return 'ok'; }
   public get recording(): boolean { return false; }
   public get report(): StatsReport | null { return null; }
-  public get findings(): ActiveFinding[] { return []; }
   /** A detached element, so code that styles or places `stats.element` keeps working. */
   public get element(): HTMLElement {
     this._element ??= document.createElement('div');
@@ -42,7 +40,6 @@ class NoopStats implements PublicKeys {
   public event(): this { return this; }
   public defineMode(): this { return this; }
   public extendMode(): this { return this; }
-  public addRule(): this { return this; }
   public addMetric(): this { return this; }
   public removeMetric(): this { return this; }
   public addControl(): this { return this; }
@@ -54,11 +51,11 @@ class NoopStats implements PublicKeys {
 
   public snapshot(): StatsSnapshot {
     return {
-      version: 1, mode: 'off', backend: 'webgl', profile: 'desktop', budget: 1000 / 60, budgets: { ...BUDGETS },
+      version: 2, mode: 'off', backend: 'webgl', profile: 'desktop', budget: 1000 / 60, budgets: { ...BUDGETS },
       frame: { fps: null, cpu: null, gpu: null, heap: null }, pacing: null,
       counters: { calls: 0, triangles: 0, points: 0, lines: 0, geometries: 0, textures: 0, programs: null, passes: null },
       canvas: { width: 0, height: 0, cssWidth: 0, cssHeight: 0, pixelRatio: null },
-      pressure: 'ok', findings: [], checks: [], scene: null, camera: null, recording: false, report: null
+      pressure: 'ok', scene: null, camera: null, recording: false, report: null
     };
   }
 }

@@ -40,10 +40,6 @@ function run(stats: Stats, seconds: number, draw?: () => void): void {
   }
 }
 
-function tipPlate(stats: Stats): HTMLElement {
-  return must(stats.element.querySelector<HTMLElement>('.tez-tips'));
-}
-
 describe('Stats lifecycle', () => {
   it('mounts one overlay over the canvas and removes it, restoring the renderer, on dispose', () => {
     const { stats, renderer } = setup();
@@ -157,35 +153,6 @@ describe('Stats budgets and diagnostics', () => {
     expect(stats.budgets.triangles).toBe(750_000);
   });
 
-  it('shows no TIP plate while everything is fine', () => {
-    const { stats } = setup();
-    run(stats, 3);
-    expect(stats.findings).toEqual([]);
-    expect(tipPlate(stats).hidden).toBe(true);
-  });
-
-  it('shows a TIP plate when a budget is exceeded for two seconds, and hides it after three good ones', () => {
-    const { stats, renderer } = setup({ budgets: { calls: 5 } });
-    let calls = 50;
-    const draw = (): void => {
-      renderer.info.render.calls = calls;
-      renderer.info.render.triangles = calls * 1000;
-    };
-    // Checks run on the first frame and then once a second: one failing check is not enough.
-    run(stats, 0.5, draw);
-    expect(stats.findings).toEqual([]);
-    run(stats, 0.6, draw);
-    expect(stats.findings.map((finding) => finding.id)).toEqual(['draw-calls']);
-    expect(tipPlate(stats).hidden).toBe(false);
-    expect(tipPlate(stats).textContent).toBe('TIP 1');
-    expect(tipPlate(stats).dataset['tip']).toContain('50 draw calls');
-
-    calls = 1;
-    run(stats, 3.3, draw);
-    expect(stats.findings).toEqual([]);
-    expect(tipPlate(stats).hidden).toBe(true);
-  });
-
   it('turns the draw call counter yellow above the profile budget', () => {
     const { stats, renderer } = setup({ budgets: { calls: 5 }, mode: 'mesh' });
     run(stats, 0.5, () => {
@@ -195,60 +162,6 @@ describe('Stats budgets and diagnostics', () => {
     expect(calls.querySelector('.tez-alert') ?? (calls.classList.contains('tez-alert') ? calls : null)).not.toBeNull();
   });
 
-  it('hides the TIP plate in Off', () => {
-    const { stats, renderer } = setup({ budgets: { calls: 5 } });
-    run(stats, 2.5, () => {
-      renderer.info.render.calls = 50;
-    });
-    stats.mode = 'off';
-    expect(tipPlate(stats).hidden).toBe(true);
-  });
-
-  it('switches single rules off by id, or all of them', () => {
-    const exceed = (renderer: FakeRenderer) => (): void => {
-      renderer.info.render.calls = 50;
-      renderer.info.render.triangles = 50_000;
-    };
-    const one = setup({ budgets: { calls: 5 }, rules: ['draw-calls'] });
-    run(one.stats, 3, exceed(one.renderer));
-    expect(one.stats.findings).toEqual([]);
-
-    const all = setup({ budgets: { calls: 5 }, rules: false });
-    all.stats.addRule({ id: 'always', title: 'Always', check: () => ({ message: 'x', advice: 'y' }) });
-    run(all.stats, 3, exceed(all.renderer));
-    expect(all.stats.findings).toEqual([]);
-  });
-
-  it('runs rules added with addRule', () => {
-    const { stats } = setup();
-    let bodies = 900;
-    stats.addRule({ id: 'bodies', title: 'Too many bodies', check: () => (bodies > 500 ? { message: `${bodies} bodies.`, advice: 'Sleep bodies at rest.' } : null) });
-    run(stats, 2.5);
-    expect(stats.findings).toEqual([{ id: 'bodies', title: 'Too many bodies', message: '900 bodies.', advice: 'Sleep bodies at rest.' }]);
-    bodies = 950;
-    run(stats, 1.1);
-    expect(stats.findings[0].message).toBe('950 bodies.');
-    expect(tipPlate(stats).dataset['tip']).toContain('950 bodies.');
-  });
-
-  it('updates the TIP plate when addRule replaces an active rule', () => {
-    const { stats } = setup();
-    stats.addRule({ id: 'mine', title: 'Mine', check: () => ({ message: 'x', advice: 'y' }) });
-    run(stats, 2.5);
-    expect(tipPlate(stats).hidden).toBe(false);
-    stats.addRule({ id: 'mine', title: 'Mine', check: () => null });
-    expect(stats.findings).toEqual([]);
-    expect(tipPlate(stats).hidden).toBe(true);
-  });
-
-  it('checks once a second whatever the refresh interval', () => {
-    const { stats } = setup({ interval: 2000 });
-    const check = vi.fn(() => null);
-    stats.addRule({ id: 'count', title: 'Count', check });
-    run(stats, 4.05);
-    expect(check.mock.calls.length).toBeGreaterThanOrEqual(4);
-  });
-
   it('surveys a slow scene less often, so the overlay is not the hitch it reports', () => {
     let surveys = 0;
     const scene: InfoScene = { traverse: () => {
@@ -256,8 +169,13 @@ describe('Stats budgets and diagnostics', () => {
       now += 100;
     } };
     const { stats } = setup({ scene });
-    run(stats, 20);
-    expect(surveys).toBeLessThanOrEqual(2);
+    for (let i = 0; i < 20; i++) {
+      stats.snapshot();
+      run(stats, 1);
+    }
+
+    // 100 ms per walk: the next waits 25 s.
+    expect(surveys).toBe(1);
   });
 
   it('never lets a broken scene break the frame', () => {
@@ -270,20 +188,6 @@ describe('Stats budgets and diagnostics', () => {
       run(stats, 12);
     }).not.toThrow();
     for (let i = 0; i < 5; i++) must(stats.element.querySelector<HTMLButtonElement>('.tez-pager')).click();
-  });
-
-  it('runs scene rules on the scene survey and clears them when the scene goes', () => {
-    const lights: { type: string; isLight: boolean }[] = [];
-    for (let i = 0; i < 12; i++) lights.push({ type: 'PointLight', isLight: true });
-    const scene: InfoScene = { traverse: (callback) => {
-      for (const light of lights) callback(light);
-    } };
-    const { stats } = setup({ scene });
-    run(stats, 1.1);
-    expect(stats.findings.map((finding) => finding.id)).toEqual(['lights']);
-    stats.scene = null;
-    run(stats, 1.1);
-    expect(stats.findings).toEqual([]);
   });
 
   it('keeps a hidden-tab gap out of the pacing rows', () => {
@@ -434,7 +338,7 @@ describe('Stats recording, events and pressure', () => {
 });
 
 describe('Stats snapshot for agents and tools', () => {
-  it('is plain JSON with the measurements, the findings and their advice', () => {
+  it('is plain JSON with the measurements, the scene and the camera', () => {
     const lights: { type: string; isLight: boolean }[] = [];
     for (let i = 0; i < 12; i++) lights.push({ type: 'PointLight', isLight: true });
     const scene: InfoScene = { traverse: (callback) => {
@@ -449,18 +353,14 @@ describe('Stats snapshot for agents and tools', () => {
     const snapshot = stats.snapshot();
     const json = JSON.parse(JSON.stringify(snapshot)) as typeof snapshot;
     expect(json).toEqual(snapshot);
-    expect(json.version).toBe(1);
+    expect(json.version).toBe(2);
     expect(json.frame.fps).toBeCloseTo(60, 0);
     expect(json.pacing?.dropped).toBe(0);
     expect(json.counters.calls).toBe(12);
     expect(json.scene?.lights).toBe(12);
     expect(json.scene?.lightsByType).toEqual({ PointLight: 12 });
     expect(json.camera).toEqual({ type: 'PerspectiveCamera', fov: 50, near: 0.001, far: 5000, position: [1, 2, 3] });
-    const ids = json.findings.map((finding) => finding.id);
-    expect(ids).toContain('lights');
-    expect(ids).toContain('depth-precision');
-    expect(json.findings.every((finding) => finding.message !== '' && finding.advice !== '')).toBe(true);
-    expect(json.checks.find((check) => check.id === 'lights')?.status).toBe('warn');
+    expect(json.budgets.calls).toBe(1000);
   });
 
   it('lists live instances in a global array, unless told not to', () => {

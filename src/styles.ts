@@ -403,8 +403,6 @@ const CSS = `
   -webkit-text-stroke: 0;
 }
 .tez-plate > span { display: block; text-box: trim-both cap alphabetic; }
-/* TIP plate: the one plate that speaks in yellow, only while something needs attention. */
-.tez-plate-alert { color: var(--tez-alert); }
 @container tez-stats (max-width: 640px) {
   .tez-stats > * {
     --tez-size-value: 22px;
