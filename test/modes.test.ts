@@ -276,7 +276,12 @@ describe('toggles that do not fit', () => {
     ];
     for (const [key, read] of sizes) {
       const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key) ?? Object.getOwnPropertyDescriptor(Element.prototype, key);
-      Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get(this: HTMLElement) { return read(this); } });
+      Object.defineProperty(HTMLElement.prototype, key, {
+        configurable: true,
+        get(this: HTMLElement) {
+          return read(this);
+        }
+      });
       restore.push(() => {
         if (descriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, key);
         else Object.defineProperty(HTMLElement.prototype, key, descriptor);
@@ -307,4 +312,3 @@ describe('toggles that do not fit', () => {
     expect(stats.element.querySelectorAll('[role="menuitemcheckbox"]')[1].getAttribute('aria-checked')).toBe('true');
   });
 });
-
