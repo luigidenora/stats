@@ -476,7 +476,7 @@ export class Stats {
   private showObjects(): void {
     if (this._excluded.includes('objects')) return;
     this._overlay.addMetric({
-      id: 'objects', label: 'Objects in the scene: every node of the scene graph, meshes, lights, groups and helpers included.', glyph: 'objects',
+      id: 'objects', label: 'Objects in the scene', glyph: 'objects',
       read: () => this.objectCount(performance.now())
     });
   }
@@ -531,26 +531,24 @@ export class Stats {
     return {
       id: 'rec',
       label: 'REC',
-      description: 'Record a session: click to start, click again to stop and get a report.',
+      description: 'Record a session',
       modes: ['graph'],
       onChange: (active) => {
         if (active) this.startRecording();
         else this.stopRecording();
       },
       tip: {
-        title: 'Record a session',
-        text: 'Click to start, click again to stop. The report leads with what averages hide: percentiles and the 1% low frame rate. Read it from stats.report or the onReport option.',
+        title: 'Record',
+        text: 'Click to start, again to stop. Read it from stats.report.',
         values: () => {
           const report = this._report;
           if (this.recording) return [row('State', 'Recording…')];
-          if (report === null) return [row('Last report', 'None yet')];
+          if (report === null) return [];
           return [
-            row('Duration', `${report.duration.toFixed(1)} s, ${formatCount(report.frames)} frames`),
-            row('FPS average', formatInt(report.fps.average)),
-            row('FPS 1% low', formatInt(report.fps.low1)),
-            row('Frame P95 / P99', `${formatMs(report.frame.p95)} / ${formatMs(report.frame.p99)} ms`),
-            row('Dropped', formatInt(report.dropped)),
-            row('Draw calls max', formatCount(report.calls.max))
+            row('Duration', `${report.duration.toFixed(1)} s`),
+            row('FPS / 1% low', `${formatInt(report.fps.average)} / ${formatInt(report.fps.low1)}`),
+            row('P95 / P99', `${formatMs(report.frame.p95)} / ${formatMs(report.frame.p99)} ms`),
+            row('Dropped', formatInt(report.dropped))
           ];
         }
       }
@@ -635,31 +633,27 @@ function defaultThresholds(budget: number): FrameThresholds {
 function builtinMetrics(sampler: FrameSampler, budgets: Budgets, profile: DeviceProfile): StatsMetric[] {
   return [
     {
-      id: 'calls', label: `Draw calls per frame. Yellow above the ${profile} budget of ${formatCount(budgets.calls)}.`, glyph: 'calls',
+      id: 'calls', label: 'Draw calls', glyph: 'calls',
       threshold: { above: budgets.calls }, read: () => sampler.calls,
       tip: {
         title: 'Draw calls',
-        text: 'Draw commands sent to the GPU this frame. The CPU pays per call, whatever its size.',
-        legend: [{ mark: 'ink', text: 'Within the budget' }, { mark: 'alert', text: `Above the ${profile} budget` }],
-        values: () => [['Now', formatCount(sampler.calls)], ['Budget', `${formatCount(budgets.calls)} (${profile})`]],
-        advice: 'Merge static meshes, use InstancedMesh or BatchedMesh for repeated objects, share materials.'
+        text: 'Per frame.',
+        legend: [{ mark: 'alert', text: `Over the ${profile} budget, ${formatCount(budgets.calls)}` }]
       }
     },
     {
-      id: 'triangles', label: `Triangles per frame. Yellow above the ${profile} budget of ${formatCount(budgets.triangles)}.`, glyph: 'triangles',
+      id: 'triangles', label: 'Triangles', glyph: 'triangles',
       threshold: { above: budgets.triangles }, read: () => sampler.triangles, width: 5,
       tip: {
         title: 'Triangles',
-        text: 'Triangles drawn this frame, after culling, every pass included (shadows render the scene again).',
-        legend: [{ mark: 'ink', text: 'Within the budget' }, { mark: 'alert', text: `Above the ${profile} budget` }],
-        values: () => [['Now', formatCount(sampler.triangles)], ['Budget', `${formatCount(budgets.triangles)} (${profile})`]],
-        advice: 'Add LOD levels for distant objects and decimate dense meshes.'
+        text: 'Per frame, every pass included.',
+        legend: [{ mark: 'alert', text: `Over the ${profile} budget, ${formatCount(budgets.triangles)}` }]
       }
     },
     { id: 'points', label: 'Points', glyph: 'points', read: () => sampler.points },
     { id: 'lines', label: 'Lines', glyph: 'lines', read: () => sampler.lines },
-    { id: 'geometries', label: 'Geometries in memory', glyph: 'geometries', read: () => sampler.geometries },
-    { id: 'textures', label: 'Textures in memory', glyph: 'textures', read: () => sampler.textures },
+    { id: 'geometries', label: 'Geometries', glyph: 'geometries', read: () => sampler.geometries },
+    { id: 'textures', label: 'Textures', glyph: 'textures', read: () => sampler.textures },
     { id: 'programs', label: 'Shader programs', glyph: 'programs', read: () => sampler.programs }
   ];
 }
@@ -669,36 +663,33 @@ function pacingMetrics(budget: number, pacing: () => FramePacing | null): StatsM
   const modes = ['graph'];
   return [
     {
-      id: 'p95', label: '95th percentile frame time over the last 240 frames, in ms. Yellow past 1.25× the budget.',
+      id: 'p95', label: 'P95 frame time',
       place: 'top', plate: 'P95', unit: 'MS', format: formatMs, width: 4, modes,
       threshold: { above: budget * 1.25 }, read: () => pacing()?.p95 ?? null,
       tip: {
         title: 'P95 frame time',
-        text: '95% of the last 240 frames were at least this fast. Steadier than the average and more honest than FPS.',
-        legend: [{ mark: 'ink', text: 'Within 1.25× the budget' }, { mark: 'alert', text: 'Past 1.25× the budget: one frame in twenty misses a refresh' }],
-        values: () => [['Budget', `${formatMs(budget)} ms`], ['Alert above', `${formatMs(budget * 1.25)} ms`]],
-        advice: 'Look at the frame graph for regular yellow columns: a periodic job (GC, uploads, physics steps) is the usual cause.'
+        text: '95% of the last 240 frames were faster.',
+        legend: [{ mark: 'alert', text: 'Over 1.25× the budget' }]
       }
     },
     {
-      id: 'worst', label: 'Longest frame in the last 240 frames, in ms. Yellow when it missed two or more refreshes.',
+      id: 'worst', label: 'Peak frame time',
       place: 'top', plate: 'PEAK', unit: 'MS', format: formatMs, width: 4, modes,
       threshold: { above: budget * 2.25 }, read: () => pacing()?.worst ?? null,
       tip: {
         title: 'Peak frame time',
-        text: 'The longest frame of the last 240: the single worst hitch.',
-        legend: [{ mark: 'ink', text: 'Missed at most one refresh' }, { mark: 'alert', text: 'Missed two or more refreshes (past 2.25× the budget)' }],
-        advice: 'A lone peak with a shader tick above it is a compile: warm up with renderer.compileAsync().'
+        text: 'Slowest of the last 240 frames.',
+        legend: [{ mark: 'alert', text: 'Missed two or more refreshes' }]
       }
     },
     {
-      id: 'dropped', label: 'Refreshes missed in the last 240 frames, by the same rule as the frame graph colours. Yellow above 0.',
+      id: 'dropped', label: 'Dropped refreshes',
       place: 'top', plate: 'DROP', format: formatInt, width: 3, modes,
       threshold: { above: 0 }, read: () => pacing()?.dropped ?? null,
       tip: {
         title: 'Dropped refreshes',
-        text: 'Screen refreshes missed in the last 240 frames, counted like the frame graph colours: a yellow column is one, a red column two or more.',
-        legend: [{ mark: 'ink', text: 'None: perfectly smooth' }, { mark: 'alert', text: 'Any: visible stutter' }]
+        text: 'Screen refreshes missed in the last 240 frames.',
+        legend: [{ mark: 'alert', text: 'Any' }]
       }
     }
   ];
@@ -709,9 +700,7 @@ function segmentMetric(name: string, read: () => number | null): StatsMetric {
   const first = name === FIRST_SEGMENT;
   return {
     id: `segment.${name}`,
-    label: first
-      ? 'CPU time from stats.begin() to the first stats.mark(), in ms per frame.'
-      : `CPU time of the "${name}" segment, from stats.mark('${name}') to the next mark or stats.end(), in ms per frame.`,
+    label: first ? 'CPU ms before the first mark()' : `CPU ms in mark('${name}')`,
     place: 'top', plate: name.slice(0, 4).toUpperCase(), unit: 'MS', format: formatMs, width: 4, modes: ['graph'], read
   };
 }

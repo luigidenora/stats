@@ -740,16 +740,10 @@ export class Overlay {
     merged.append(el('span', 'tez-frame', 'FRM'), el('span', 'tez-gpu', 'GPU'), el('span', 'tez-cpu', 'CPU'));
     return {
       frame: panel(new TimeGraph(b, [{ samples: s.frame }], { width: GRAPH, height: HEIGHT, vertical: false, autoScale: false, events: s.compiles, label: '' }),
-        stack('FRM', 'MS'), 'MS', ms, s.frame,
-        'Frame time, one column per frame, newest on the right: white on time, yellow when one refresh was missed, red when two or more were. '
-        + 'The side ticks mark the budget; a tick above a column marks a frame that created a new shader program.', frameTip(b, s.frame)),
-      cpu: panel(graph([{ samples: s.cpu, color: 'cpu' }], b, true, [s.gpu]), stack('MS', 'CPU', 'tez-cpu'), 'MS', ms, s.cpu,
-        'CPU time per frame, newest on the right. CPU and GPU share one scale.', seriesTip('cpu', b, s.cpu)),
-      gpu: panel(graph([{ samples: s.gpu, color: 'gpu' }], b, true, [s.cpu]), stack('MS', 'GPU', 'tez-gpu'), 'MS', ms, s.gpu,
-        'GPU time per frame, newest on the right. CPU and GPU share one scale.', seriesTip('gpu', b, s.gpu)),
-      time: panel(this._timeGraph, merged, 'MS', ms, s.frame, 'Frame (blue), GPU (green) and CPU (red) time in one graph, each scaled between its own recent min and max '
-      + 'so the three always mix: overlaps add up to cyan, yellow, magenta and white. It shows when each one moves, not how big it is; '
-      + 'the readouts above give the values. A tick above a column marks a frame that created a new shader program.', mergedTip(b, s))
+        stack('FRM', 'MS'), 'MS', ms, s.frame, 'Frame time: white on time, yellow one refresh missed, red two or more.', frameTip(b, s.frame)),
+      cpu: panel(graph([{ samples: s.cpu, color: 'cpu' }], b, true, [s.gpu]), stack('MS', 'CPU', 'tez-cpu'), 'MS', ms, s.cpu, 'CPU time per frame.', seriesTip('cpu', b, s.cpu)),
+      gpu: panel(graph([{ samples: s.gpu, color: 'gpu' }], b, true, [s.cpu]), stack('MS', 'GPU', 'tez-gpu'), 'MS', ms, s.gpu, 'GPU time per frame.', seriesTip('gpu', b, s.gpu)),
+      time: panel(this._timeGraph, merged, 'MS', ms, s.frame, 'Frame, GPU and CPU time, each on its own scale.', mergedTip(b, s))
     };
   }
 
@@ -804,11 +798,11 @@ const orDash = (value: number | null | undefined, format: (v: number) => string)
 function fpsTip(budget: number, last: LastValues): TipContent {
   return {
     title: 'Frames per second',
-    text: 'Frames drawn per second, averaged over the last refresh (4 times a second). Averages hide stutter: read P95 and DROP in Graph mode.',
-    legend: [{ mark: 'ink', text: 'At or near the target rate' }, { mark: 'alert', text: 'Below the alert bound (default 90% of the target)' }],
+    text: 'Average over the last quarter second.',
+    legend: [{ mark: 'alert', text: 'Under 90% of the target' }],
     values: () => {
-      const { frame, thresholds } = last();
-      return [['Now', orDash(frame.fps, formatInt)], ['Target', `${formatInt(1000 / budget)} fps`], ['Alert below', orDash(thresholds.fps?.below, formatInt)]];
+      const { frame } = last();
+      return [['Now', orDash(frame.fps, formatInt)], ['Target', formatInt(1000 / budget)]];
     }
   };
 }
@@ -816,86 +810,70 @@ function fpsTip(budget: number, last: LastValues): TipContent {
 function timeTip(kind: 'cpu' | 'gpu', budget: number, last: LastValues): TipContent {
   const cpu = kind === 'cpu';
   return {
-    title: cpu ? 'CPU time per frame' : 'GPU time per frame',
-    text: cpu
-      ? 'JavaScript time from stats.begin() to stats.end(): scene updates, culling and command submission.'
-      : 'Time the GPU spent on the frame, from timer queries. Results arrive a few frames late.',
+    title: cpu ? 'CPU time' : 'GPU time',
+    text: cpu ? 'JavaScript per frame, begin() to end().' : 'GPU per frame, from timer queries.',
     legend: [
-      { mark: 'ink', text: 'Dial: share of the frame budget; a full disk is over budget' },
-      ...(cpu ? [] : [{ mark: 'ink' as const, text: 'Dashed dial: this browser exposes no GPU timer (WebGPU needs trackTimestamp: true)' }]),
-      { mark: 'alert', text: 'Above the alert bound (default: the budget)' }
+      { mark: 'ink', text: 'Dial: share of the frame budget' },
+      ...(cpu ? [] : [{ mark: 'ink' as const, text: 'Dashed: no GPU timer here' }]),
+      { mark: 'alert', text: 'Over budget' }
     ],
     values: () => {
       const value = cpu ? last().frame.cpu : last().frame.gpu;
-      return [['Now', orDash(value, (v) => `${formatMs(v)} ms`)], ['Budget', `${formatMs(budget)} ms`], ['Share', orDash(value, (v) => `${formatInt((v / budget) * 100)}%`)]];
-    },
-    advice: cpu
-      ? 'Split the frame with stats.mark() to find the slow part; move heavy work out of the loop or into a worker.'
-      : 'GPU-bound: lower the pixel ratio, shadow map sizes or overdraw (transparent layers) first.'
+      return [['Now', orDash(value, (v) => `${formatMs(v)} ms`)], ['Budget', `${formatMs(budget)} ms`]];
+    }
   };
 }
 
 /** Recent range of a series as tooltip rows. */
 function rangeRows(samples: Samples, budget: number): (readonly [string, string])[] {
-  const n = 128;
-  return [['Recent max', orDash(samples.max(n), (v) => `${formatMs(v)} ms`)], ['Recent min', orDash(samples.min(n), (v) => `${formatMs(v)} ms`)], ['Budget', `${formatMs(budget)} ms`]];
+  return [['Max', orDash(samples.max(128), (v) => `${formatMs(v)} ms`)], ['Budget', `${formatMs(budget)} ms`]];
 }
 
 function frameTip(budget: number, frame: Samples): TipContent {
   return {
     title: 'Frame time',
-    text: 'Time between frames, newest on the right. Each column keeps the slowest of its frames, so no spike is hidden.',
+    text: 'Slowest frame of each column, newest on the right.',
     legend: [
       { mark: 'ink', text: 'On time' },
-      { mark: 'alert', text: 'Missed one screen refresh (past 1.25× the budget)' },
-      { mark: 'clip', text: 'Missed two or more: the stutter users see' },
-      { mark: 'budget-tick', text: 'The frame budget' },
-      { mark: 'event-tick', text: 'A new shader program was created in that frame' },
-      { mark: 'flag-tick', text: 'An event the app marked with stats.event()' }
+      { mark: 'alert', text: 'Missed one refresh' },
+      { mark: 'clip', text: 'Missed two or more' },
+      { mark: 'budget-tick', text: 'Budget' },
+      { mark: 'event-tick', text: 'Shader compiled' },
+      { mark: 'flag-tick', text: 'stats.event()' }
     ],
-    values: () => rangeRows(frame, budget),
-    advice: 'A red column under a top tick is a shader compile: warm up with renderer.compileAsync(scene, camera) before showing the scene.'
+    values: () => rangeRows(frame, budget)
   };
 }
 
 function seriesTip(kind: 'cpu' | 'gpu', budget: number, samples: Samples): TipContent {
-  const cpu = kind === 'cpu';
   return {
-    title: cpu ? 'CPU time graph' : 'GPU time graph',
-    text: 'One column per group of frames, newest on the right. CPU and GPU share one scale, so the taller one is the bottleneck.',
-    legend: [{ mark: kind, text: cpu ? 'CPU time per frame' : 'GPU time per frame' }, { mark: 'budget-tick', text: 'The frame budget' }],
+    title: kind === 'cpu' ? 'CPU time' : 'GPU time',
+    text: 'Per frame. CPU and GPU share one scale.',
+    legend: [{ mark: kind, text: kind === 'cpu' ? 'CPU' : 'GPU' }, { mark: 'budget-tick', text: 'Budget' }],
     values: () => rangeRows(samples, budget)
   };
 }
 
 function mergedTip(budget: number, s: { frame: Samples; cpu: Samples; gpu: Samples }): TipContent {
   return {
-    title: 'Frame, GPU and CPU',
-    text: 'The three times in one graph, each scaled to its own recent min and max: it shows when each one moves, not how big it is. The readouts give the values.',
+    title: 'Frame · GPU · CPU',
+    text: 'Each on its own scale: when they move, not how much.',
     legend: [
-      { mark: 'frame', text: 'Frame time' },
-      { mark: 'gpu', text: 'GPU time' },
-      { mark: 'cpu', text: 'CPU time' },
-      { mark: 'ink', text: 'All three peak together (colours add like light)' },
-      { mark: 'lane', text: 'Lane under the box: yellow missed one refresh, red two or more' },
-      { mark: 'event-tick', text: 'A new shader program was created' },
-      { mark: 'flag-tick', text: 'An event the app marked with stats.event()' }
+      { mark: 'frame', text: 'Frame' },
+      { mark: 'gpu', text: 'GPU' },
+      { mark: 'cpu', text: 'CPU' },
+      { mark: 'lane', text: 'Late frames' },
+      { mark: 'event-tick', text: 'Shader compiled' },
+      { mark: 'flag-tick', text: 'stats.event()' }
     ],
-    values: () => [
-      ['Frame max', orDash(s.frame.max(128), (v) => `${formatMs(v)} ms`)],
-      ['GPU max', orDash(s.gpu.max(128), (v) => `${formatMs(v)} ms`)],
-      ['CPU max', orDash(s.cpu.max(128), (v) => `${formatMs(v)} ms`)],
-      ['Budget', `${formatMs(budget)} ms`]
-    ]
+    values: () => [['Frame max', orDash(s.frame.max(128), (v) => `${formatMs(v)} ms`)], ['Budget', `${formatMs(budget)} ms`]]
   };
 }
 
 function heapTip(last: LastValues): TipContent {
   return {
     title: 'JS heap',
-    text: 'Memory used by JavaScript objects, in MB. Chromium only; — elsewhere. Not GPU memory.',
-    legend: [{ mark: 'ink', text: 'A slow sawtooth is normal garbage collection' }],
-    values: () => [['Now', orDash(last().frame.heap, (v) => `${formatInt(v)} MB`)]],
-    advice: 'A line that keeps climbing points to a leak; a fast sawtooth means new objects every frame: reuse vectors and matrices.'
+    text: 'MB used by JavaScript. Chromium only.',
+    values: () => [['Now', orDash(last().frame.heap, (v) => `${formatInt(v)} MB`)]]
   };
 }

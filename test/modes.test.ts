@@ -58,7 +58,7 @@ describe('mode plate', () => {
   it('shows the mode code and describes the mode in its tooltip', () => {
     const stats = setup({ mode: 'performance' });
     expect(q(stats, '.tez-disp-code').textContent).toBe('PERF');
-    expect(q(stats, '.tez-disp-button').dataset['tip']).toContain('Display mode: Performance');
+    expect(q(stats, '.tez-disp-button').dataset['tip']).toContain('Mode: Performance');
   });
 
   it('opens the menu from the caret, picks a mode, and closes on Escape or a press outside', () => {
@@ -304,7 +304,7 @@ describe('toggles that do not fit', () => {
     expect(stats.element.classList.contains('tez-folded')).toBe(true);
     q(stats, '.tez-disp-more').click();
     const rows = Array.from(stats.element.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]'));
-    expect(rows.map((row) => row.textContent)).toEqual(['Record a session: click to start, click again to stop and get a report.REC', 'WireframeWIRE']);
+    expect(rows.map((row) => row.textContent)).toEqual(['Record a sessionREC', 'WireframeWIRE']);
     rows[1].click();
     expect(onChange).toHaveBeenLastCalledWith(true);
     expect(q(stats, '.tez-menu').hidden).toBe(true);

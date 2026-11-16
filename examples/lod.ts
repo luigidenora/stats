@@ -204,13 +204,13 @@ export class LodField {
 /** Adds a 'lod' display mode to the mode plate. Everything here is plain declarative data. */
 export function addLodMode(stats: Stats, field: LodField): void {
   // A counter with a custom glyph, beside the built-in ones in every mode.
-  stats.addMetric({ id: 'lod.full', label: 'LOD objects at full detail (L0)', glyph: LOD_GLYPH, read: () => field.fullDetail() });
+  stats.addMetric({ id: 'lod.full', label: 'Objects at L0', glyph: LOD_GLYPH, read: () => field.fullDetail() });
 
   stats.defineMode({
     id: 'lod',
     name: 'Level of detail',
     code: 'LOD',
-    description: 'Objects per LOD level, switches per second by direction and objects near a threshold.',
+    description: 'Levels, switches, savings.',
     histogram: {
       id: 'lod.px',
       label: ['LOD', 'PX'],
@@ -221,8 +221,7 @@ export function addLodMode(stats: Stats, field: LodField): void {
         { name: 'L1', read: () => field.screenSizes(1) },
         { name: 'L2', read: () => field.screenSizes(2) }
       ],
-      description: 'On-screen size of objects per LOD level (log scale): red L0, green L1, blue L2. '
-        + 'Where colours overlap, two levels are used for the same size: distance-based LOD ignores object size.'
+      description: 'On-screen size per LOD level, log scale. Overlaps: two levels for one size.'
     },
     graphs: [
       {
@@ -232,8 +231,7 @@ export function addLodMode(stats: Stats, field: LodField): void {
         unit: 'sw/s',
         read: () => field.coarserPerSecond(),
         readBelow: () => field.finerPerSecond(),
-        description: 'LOD switches per second: above the middle line towards coarser levels, below towards finer ones. '
-          + 'Symmetric spikes while the camera stands still mean objects oscillate on a threshold: add hysteresis.'
+        description: 'Switches per second: up to coarser, down to finer.'
       },
       {
         id: 'lod.near',
@@ -241,22 +239,21 @@ export function addLodMode(stats: Stats, field: LodField): void {
         scale: 'auto',
         unit: '%',
         read: () => field.nearThresholdPercent(),
-        description: 'Share of objects within ±10% of a LOD switching distance. When it is high, a small camera move '
-          + 'switches many objects at once: spread the thresholds or rearrange the scene.'
+        description: 'Objects within 10% of a switching distance.'
       }
     ],
     // A toggle next to the mode plate, shown only in this mode.
     controls: [
-      { id: 'lod.color', label: 'COLOR', description: 'Colour objects by LOD level: red L0 (full detail), green L1, blue L2 (coarsest), as in the histogram.', onChange: (on) => { field.setColored(on); } }
+      { id: 'lod.color', label: 'COLOR', description: 'Colour by LOD level', onChange: (on) => { field.setColored(on); } }
     ],
     metrics: [
-      { id: 'lod.saved', label: 'Triangles saved by LOD, compared with drawing everything at L0', place: 'top', plate: 'SAVE', unit: '%', width: 3, read: () => field.savedPercent(), format: (v) => String(Math.round(v)), threshold: { below: 30 } }
+      { id: 'lod.saved', label: 'Triangles saved by LOD', place: 'top', plate: 'SAVE', unit: '%', width: 3, read: () => field.savedPercent(), format: (v) => String(Math.round(v)), threshold: { below: 30 } }
     ],
     distribution: {
       id: 'lod.levels',
       label: ['LOD', 'LVL'],
       read: () => field.countsPerLevel(),
-      description: 'Objects at each LOD level, L0 (full detail) to L2 (coarsest)'
+      description: 'Objects per LOD level'
     }
   });
 }

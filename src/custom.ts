@@ -153,8 +153,8 @@ export function graphPanel(timeGraph: TimeGraph, label: HTMLElement, unit: strin
   const scale = el('span', '', '—');
   const normalized = timeGraph.normalized;
   const aside = hit(el('span', 'tez-stack tez-aside'), normalized
-    ? `Slowest frame among the visible columns, in ${unit}: yellow past 1.25× the budget, red past 2.25×. Each line is scaled to its own range.`
-    : `Value at the top of the graph, in ${unit}.`);
+    ? `Slowest visible frame, in ${unit}`
+    : `Top of the scale, in ${unit}`);
   aside.append(el('span', '', normalized ? 'PEAK' : 'MAX'), scale);
   const element = el('div', 'tez-panel');
   const plot = rich === undefined ? hit(el('div', 'tez-panel-plot'), tip) : setTip(el('div', 'tez-panel-plot'), rich);

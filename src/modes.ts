@@ -24,9 +24,9 @@ export interface ModeInfo {
 
 export const MODES: readonly ModeInfo[] = [
   { id: 'simple', name: 'Simple', code: 'STD', description: 'Frame rate, CPU and GPU time.' },
-  { id: 'performance', name: 'Performance', code: 'PERF', description: 'Simple plus the JS heap and the renderer counters.' },
-  { id: 'graph', name: 'Graph', code: 'GRPH', description: 'Performance plus the frame, CPU and GPU time graphs and the frame pacing rows.' },
-  { id: 'off', name: 'Off', code: 'OFF', description: 'Nothing on screen but this control.' }
+  { id: 'performance', name: 'Performance', code: 'PERF', description: 'Plus heap and counters.' },
+  { id: 'graph', name: 'Graph', code: 'GRPH', description: 'Plus graphs and frame pacing.' },
+  { id: 'off', name: 'Off', code: 'OFF', description: 'Only this plate.' }
 ];
 
 export function findMode(modes: readonly ModeInfo[], id: StatsMode): ModeInfo | null {
@@ -74,7 +74,7 @@ export class ModeControl {
     this._more = document.createElement('button');
     this._more.type = 'button';
     this._more.className = 'tez-plate tez-disp-more tez-hit';
-    this._more.dataset['tip'] = 'Choose a display mode from the list.';
+    this._more.dataset['tip'] = 'All modes';
     this._more.setAttribute('aria-label', 'Choose a display mode');
     this._more.setAttribute('aria-haspopup', 'menu');
     this._more.setAttribute('aria-expanded', 'false');
@@ -222,15 +222,10 @@ export class ModeControl {
   private render(): void {
     const info = findMode(this._modes(), this._mode) ?? MODES[0];
     this._code.textContent = info.code;
-    const tip = `Display mode: ${info.name}. Click for the next mode; the arrow or a right click opens the list.`;
+    const tip = `Mode: ${info.name}. Click for the next one.`;
     setTip(this._button, {
-      title: `Display mode: ${info.name}`,
-      text: info.description,
-      legend: [
-        { mark: 'alert', text: 'Click or tap: the next mode' },
-        { mark: 'alert', text: 'Arrow or right click: choose from the list' },
-        { mark: 'alert', text: 'Touch: long press any element for its help' }
-      ]
+      title: `Mode: ${info.name}`,
+      text: `${info.description} Click: next. Arrow: list.`
     });
     this._button.setAttribute('aria-label', tip);
     this.element.classList.toggle('tez-disp-off', this._mode === 'off');

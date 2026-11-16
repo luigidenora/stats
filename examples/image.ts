@@ -13,15 +13,22 @@ import type { Stats } from '../src/index.js';
 import { IMAGE_BINS, IMAGE_HEIGHT, IMAGE_WIDTH, ImageSampler, zebraMask } from './image-sampler.js';
 
 /** Aids drawn over the canvas: they sit under the overlay, which is fixed on top. */
+function show(element: HTMLElement, on: boolean): void {
+  element.style.display = on ? 'block' : 'none';
+}
+
+function shown(element: HTMLElement): boolean {
+  return element.style.display !== 'none';
+}
+
 function overlayCanvas(source: HTMLCanvasElement): { zebra: HTMLCanvasElement; grid: HTMLDivElement; place: () => void; dispose: () => void } {
   const zebra = document.createElement('canvas');
   zebra.width = IMAGE_WIDTH;
   zebra.height = IMAGE_HEIGHT;
-  zebra.style.cssText = 'position: fixed; pointer-events: none; image-rendering: pixelated; z-index: 9999;';
-  zebra.hidden = true;
+  // Shown and hidden with display, not the hidden attribute: page rules like `canvas { display: block }` would win over it.
+  zebra.style.cssText = 'position: fixed; pointer-events: none; image-rendering: pixelated; z-index: 9999; display: none;';
   const grid = document.createElement('div');
-  grid.style.cssText = 'position: fixed; pointer-events: none; z-index: 9999;';
-  grid.hidden = true;
+  grid.style.cssText = 'position: fixed; pointer-events: none; z-index: 9999; display: none;';
   // Thirds and a centre cross: 1px light lines with a dark contour, like the overlay's own geometry.
   const line = 'position: absolute; background: #f4f4f1; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.85); opacity: 0.8;';
   for (const at of ['33.333%', '66.667%']) {
@@ -74,7 +81,7 @@ export function addImageMode(stats: Stats, canvas: HTMLCanvasElement): void {
   // Channel reads run inside stats.end(), right after the render: the copy needs no preserved buffer.
   const channel = (bins: Float32Array) => (): Float32Array | null => {
     if (!sampler.capture(canvas)) return null;
-    if (zebraImage !== null && zebraContext !== null && aids.zebra.hidden !== true && sampler.pixels !== null) {
+    if (zebraImage !== null && zebraContext !== null && shown(aids.zebra) && sampler.pixels !== null) {
       zebraMask(sampler.pixels, zebraImage.data, zebraPhase++);
       zebraContext.putImageData(zebraImage, 0, 0);
     }
@@ -97,7 +104,7 @@ export function addImageMode(stats: Stats, canvas: HTMLCanvasElement): void {
     id: 'image',
     name: 'Image',
     code: 'IMG',
-    description: 'The R, G, B histogram of the rendered image, with zebra, framing guides and the pixel under the pointer.',
+    description: 'RGB histogram, zebra, guides, pixel colour.',
     histogram: {
       id: 'image.rgb',
       label: ['RGB', 'IMG'],
@@ -112,35 +119,30 @@ export function addImageMode(stats: Stats, canvas: HTMLCanvasElement): void {
       ],
       tip: {
         title: 'Image histogram',
-        text: 'Red, green and blue of the rendered image after tone mapping, 0 (black) to 255 (white). White where the three agree, coloured fringes for casts.',
-        legend: [
-          { mark: 'r', text: 'Red channel' },
-          { mark: 'g', text: 'Green channel' },
-          { mark: 'b', text: 'Blue channel' },
-          { mark: 'alert', text: 'Edge mark: values piled up at black or white (clipping)' }
-        ],
+        text: 'The rendered image, 0 to 255. White where channels agree.',
+        legend: [{ mark: 'alert', text: 'Edge mark: clipping' }],
         values: () => (sampler.valid
           ? [['Highlights clipped', `${Math.round(sampler.clippedHigh * 100)}%`], ['Blacks crushed', `${Math.round(sampler.clippedLow * 100)}%`]]
           : [['Canvas', 'not readable']])
       }
     },
     metrics: [{
-      id: 'image.pixel', label: 'Colour of the rendered pixel under the pointer.', place: 'top', plate: 'PIX', width: 7,
+      id: 'image.pixel', label: 'Pixel under the pointer', place: 'top', plate: 'PIX', width: 7,
       read: pixel, format: (value) => `#${value.toString(16).padStart(6, '0').toUpperCase()}`
     }],
     controls: [
       {
-        id: 'image.zebra', label: 'ZEBRA', description: 'Stripes over clipped highlights (a channel at 250 or more of 255).',
+        id: 'image.zebra', label: 'ZEBRA', description: 'Zebra on clipped highlights',
         onChange: (on) => {
           aids.place();
-          aids.zebra.hidden = !on;
+          show(aids.zebra, on);
         }
       },
       {
-        id: 'image.grid', label: 'GRID', description: 'Framing guides: rule-of-thirds lines and a centre mark.',
+        id: 'image.grid', label: 'GRID', description: 'Thirds and centre',
         onChange: (on) => {
           aids.place();
-          aids.grid.hidden = !on;
+          show(aids.grid, on);
         }
       }
     ]
@@ -153,8 +155,8 @@ export function addImageMode(stats: Stats, canvas: HTMLCanvasElement): void {
     if (isImage !== wasImage) {
       wasImage = isImage;
       if (!isImage) {
-        aids.zebra.hidden = true;
-        aids.grid.hidden = true;
+        show(aids.zebra, false);
+        show(aids.grid, false);
         stats.setControl('image.zebra', false);
         stats.setControl('image.grid', false);
       }
