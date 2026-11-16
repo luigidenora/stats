@@ -3,7 +3,7 @@
  *
  * A spotlight darkens everything but one part of the overlay, framed by four yellow corners like a
  * camera's autofocus box; a caption in plate style sits beside it, follows it, and says what it is. The events it shows are real: a
- * deliberate hitch, a shader compile, a recording. Not part of the package.
+ * deliberate hitch and a shader compile. Not part of the package.
  *
  * Keys: → or Space next, ← back, Esc leaves the tour.
  */
@@ -117,20 +117,6 @@ export function startTour(context: TourContext, options: { autoplay: boolean }):
   let codeTimer = 0;
   let frame = 0;
   let index = -1;
-  let since = 0;
-
-  const report = (): string => {
-    const r = stats.report;
-    if (r === null) return '';
-    return `FPS ${Math.round(r.fps.average)} · 1% low ${Math.round(r.fps.low1)} · P99 ${r.frame.p99.toFixed(1)} ms · dropped ${r.dropped}`;
-  };
-
-  const snapshot = (): string => {
-    const s = stats.snapshot();
-    const fps = s.frame.fps === null ? '—' : s.frame.fps.toFixed(1);
-    const p95 = s.pacing === null ? '—' : s.pacing.p95.toFixed(1);
-    return `{ fps: ${fps}, p95: ${p95}, calls: ${s.counters.calls}, triangles: ${s.counters.triangles}, … }`;
-  };
 
   const steps: Step[] = [
     { title: 'three.ez stats', text: 'A stats overlay for three.js that reads like a camera display.', code: () => 'WebGL · WebGPU', seconds: 3.6 },
@@ -144,7 +130,7 @@ export function startTour(context: TourContext, options: { autoplay: boolean }):
       text: 'A 45 ms hitch, on purpose: yellow missed one refresh, red two or more. The flag is stats.event().',
       enter: () => {
         setTimeout(() => {
-          stats.event('hitch');
+          stats.event();
           hitch(45);
         }, 700);
       },
@@ -156,22 +142,6 @@ export function startTour(context: TourContext, options: { autoplay: boolean }):
         setTimeout(context.compileShader, 600);
       }
     },
-    {
-      title: 'Record', text: 'stats.startRecording(), then stopRecording(): a report.',
-      code: () => `Recording… ${((performance.now() - since) / 1000).toFixed(1)} s`,
-      enter: () => {
-        since = performance.now();
-        stats.startRecording();
-      },
-      seconds: 4
-    },
-    {
-      title: 'Report', text: 'What averages hide. Compare runs, or assert it in CI.', code: report,
-      enter: () => {
-        stats.stopRecording();
-      },
-      seconds: 4.6
-    },
     { mode: 'lod', target: boxOf(root, '.tez-c-hist'), title: 'Your own modes', text: 'Plain data in, this interface out. This LOD mode is an example in the repo.' },
     {
       mode: 'image', target: boxOf(root, '.tez-c-hist'), title: 'Image', text: 'Another example: an RGB histogram of the render, zebra on clipped highlights.',
@@ -182,7 +152,6 @@ export function startTour(context: TourContext, options: { autoplay: boolean }):
         stats.setControl('image.zebra', false);
       }
     },
-    { mode: 'graph', title: 'For agents', text: 'Everything on screen, as JSON: agents read numbers, not pixels.', code: () => `stats.snapshot() → ${snapshot()}`, seconds: 4.6 },
     { title: 'Ship without it', text: 'The same API, a no-op of 0.6 kB in production builds.', code: () => 'import { Stats } from \'@three.ez/stats/dev\'' },
     { title: 'three.ez stats', text: 'github.com/luigidenora/stats', code: () => 'npm i @three.ez/stats', seconds: 6 }
   ];
@@ -333,7 +302,6 @@ export function startTour(context: TourContext, options: { autoplay: boolean }):
     clearTimeout(timer);
     clearInterval(codeTimer);
     cancelAnimationFrame(frame);
-    if (stats.recording) stats.stopRecording();
     window.removeEventListener('keydown', onKey);
     layer.remove();
     document.body.classList.remove('tour-on');

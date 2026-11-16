@@ -8,6 +8,3 @@
 
 export { Stats, type StatsOptions } from './stats.js';
 export type { StatsMode, StatsMetric, GraphDefinition, DistributionDefinition, ModeContent, ModeDefinition, ControlDefinition, HistogramDefinition, TipContent } from './types.js';
-export type { StatsReport } from './recorder.js';
-export type { StatsSnapshot } from './snapshot.js';
-export type { Pressure } from './pressure.js';

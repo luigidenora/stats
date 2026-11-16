@@ -1,4 +1,3 @@
-import { registerAgentTools } from '../src/agent.js';
 import { Stats } from '../src/index.js';
 import { addImageMode } from './image.js';
 import { addLodMode, LodField } from './lod.js';
@@ -93,12 +92,6 @@ async function main() {
 
   const stats = new Stats(renderer, {
     scene,
-    // Lists the overlay in globalThis.__THREE_EZ_STATS__, so agents driving this page can read it.
-    expose: true,
-    // Every finished recording (the REC plate in Performance mode) lands here.
-    onReport: (report) => {
-      console.table({ 'FPS average': report.fps.average, 'FPS 1% low': report.fps.low1, 'Frame P95 (ms)': report.frame.p95, 'Frame P99 (ms)': report.frame.p99, Dropped: report.dropped });
-    },
     // A custom row uses the same mechanism as the built-in ones.
     metrics: [{ id: 'instances', label: 'Instances drawn by the InstancedMesh', place: 'top', plate: 'INST', modes: ['performance', 'graph'], read: () => mesh.count }]
   });
@@ -106,8 +99,6 @@ async function main() {
   addLodMode(stats, lodField);
   // Another custom mode: the rendered image as a camera display reads it (see image.ts).
   addImageMode(stats, renderer.domElement);
-  // Offers the overlay to in-browser agents (WebMCP) where the browser supports it.
-  registerAgentTools(stats);
   // ?tour plays the guided tour (?tour=manual steps by hand); it loads only then.
   if (params.has('tour')) {
     // Each call gives a crate a material type it has not used: a new shader program, compiled live.
@@ -144,10 +135,8 @@ async function main() {
     camera.lookAt(0, 0, 0);
     // A flag on the graphs each time the camera comes closest: was that the hitch?
     const near = swing < -0.98;
-    if (near && !wasNear) stats.event('closest');
+    if (near && !wasNear) stats.event();
     wasNear = near;
-    // Splits CPU time into 'logic' (above) and 'render' rows in Performance mode.
-    stats.mark('render');
     renderer.render(scene, camera);
     stats.end();
     lodField.afterRender();

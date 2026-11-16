@@ -1,7 +1,7 @@
 {
   "name": "@three.ez/stats",
   "version": "1.0.0",
-  "description": "Statistics overlay for three.js, WebGL and WebGPU: frame timing, GPU time, frame pacing, renderer counters, memory, session reports and tools for agents.",
+  "description": "Statistics overlay for three.js, WebGL and WebGPU: frame rate, CPU and GPU time, renderer counters and memory, in three levels of detail.",
   "author": "Luigi Denora (https://github.com/luigidenora)",
   "license": "MIT",
   "type": "module",
@@ -16,10 +16,6 @@
       "types": "./build/types/dev.d.ts",
       "production": "./build/noop.js",
       "default": "./build/dev.js"
-    },
-    "./agent": {
-      "types": "./build/types/agent.d.ts",
-      "import": "./build/agent.js"
     },
     "./package.json": "./package.json"
   },
@@ -48,9 +44,7 @@
     "overlay",
     "webgl",
     "webgpu",
-    "fps",
-    "mcp",
-    "agent"
+    "fps"
   ],
   "homepage": "https://three-ez-stats.vercel.app",
   "repository": {

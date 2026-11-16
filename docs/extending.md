@@ -33,25 +33,9 @@ stats.extendMode('graph', {
 });
 ```
 
-## Split CPU time with marks
+## Shader compiles and events
 
-```ts
-stats.begin();
-world.update();            // 'logic': begin() to the first mark
-stats.mark('render');      // 'render': this mark to end()
-renderer.render(scene, camera);
-stats.end();
-```
-
-Each segment's average CPU ms per frame is in `stats.snapshot().segments`. At most 4
-segments; marks outside `begin()` / `end()` are ignored with one warning. The CPU readout stays the
-whole `begin()` → `end()` time, and the segments add up to it.
-
-## Pacing and shader events
-
-Frame pacing (P95, worst frame, refreshes missed, over the last 240 frames) is in
-`stats.snapshot().pacing` and in recording reports; it is not drawn as rows. A tick above the frame
-graph marks a frame that created a new shader program, a common cause of a single spike. It reads
+A tick above the frame graph marks a frame that created a new shader program, a common cause of a single spike. It reads
 the program count, so it fires on creation; with parallel or async compilation the stall can land
 a few frames later.
 
@@ -115,13 +99,11 @@ Glyphs are SVG paths on a 16×16 grid, filled in white (`stroke: 1.2` for lines)
 free silhouette with a dark contour, `'memory'` puts it on a plate. Two-direction graphs use
 `readBelow` (drawn below a middle zero line).
 
-## Events, recordings and the snapshot
+## Events
 
 ```ts
-stats.event('wave-start');            // a flag on the graphs, and a named entry in the recording
-stats.startRecording();
-const report = stats.stopRecording(); // onReport receives every report
-const snapshot = stats.snapshot();    // everything as JSON (see agents.md)
+spawnWave();
+stats.event(); // a flag above the frame graph: what was the app doing when a frame hitched?
 ```
 
 ## Controls from code, and helpers in the scene

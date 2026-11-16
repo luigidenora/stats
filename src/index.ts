@@ -1,12 +1,8 @@
-export { Stats, GLOBAL_HOOK, type StatsOptions } from './stats.js';
-export type { StatsReport, MemoryCounters } from './recorder.js';
-export type { StatsSnapshot, SceneSummary } from './snapshot.js';
-export type { Pressure } from './pressure.js';
+export { Stats, type StatsOptions, type InfoScene } from './stats.js';
 export { MODES, type ModeInfo } from './modes.js';
 export type { FrameThresholds } from './overlay.js';
 export type { StatsMode, BuiltinMode, StatsMetric, GraphDefinition, GraphScale, GraphColor, DistributionDefinition, ModeContent, ModeDefinition, ControlDefinition, HistogramDefinition, HistogramChannel, TipContent, TipMark } from './types.js';
 export type { StatsRenderer, BackendKind } from './sampler.js';
-export type { InfoScene, SceneSurvey } from './scene-survey.js';
 export type { Budgets, DeviceProfile } from './budgets.js';
 export type { Threshold } from './format.js';
 export { formatBytes, formatCount, formatInt, formatMs, formatPercent } from './format.js';

@@ -10,13 +10,6 @@
  * (timer queries on the app's WebGL context, or WebGPU timestamp resolves).
  */
 
-import { warnOnce } from './custom.js';
-
-/** Name of the CPU segment from begin() to the first mark(). */
-export const FIRST_SEGMENT = 'logic';
-/** Named CPU segments a frame may have, the first one included: each takes a row on screen. */
-export const MAX_SEGMENTS = 4;
-
 interface InfoLike {
   autoReset: boolean;
   reset: () => void;
@@ -199,13 +192,6 @@ export class FrameSampler {
   private _gpuLatest: number | null = null;
   private _resolving = false;
   private _onGpuSample: ((ms: number) => void) | null = null;
-  private _inFrame = false;
-  /** Open CPU segment of the current frame, or null before the first mark(). */
-  private _segment: string | null = null;
-  private _segmentStart = 0;
-  /** CPU time per segment summed over the window, and the averages of the last closed window. */
-  private readonly _segmentSums = new Map<string, number>();
-  private readonly _segmentAverages = new Map<string, number>();
   private _programs: number | null = null;
   /**
    * The next frame only opens the averaging window (at its end): the first frame, and the first
@@ -214,8 +200,6 @@ export class FrameSampler {
    */
   private _resume = true;
 
-  /** Called once per segment name, the first time it has a measured duration. */
-  public onSegment: ((name: string) => void) | null = null;
   /** The last frame created at least one new shader program. */
   public compiled = false;
 
@@ -250,39 +234,14 @@ export class FrameSampler {
     this.lastInterval = this._lastBegin > 0 ? now - this._lastBegin : 0;
     this._lastBegin = now;
     this._frameStart = now;
-    this._inFrame = true;
-    this._segment = null;
     if (this._countAllPasses) this._renderer.info.reset();
     this._timer?.begin();
-  }
-
-  /**
-   * Closes the current CPU segment and opens `name`. The time from begin() to the first mark is
-   * the 'logic' segment; the last segment ends at end(). Total CPU time stays begin() to end().
-   */
-  public mark(name: string): void {
-    if (!this._inFrame) {
-      warnOnce(`mark("${name}") was called outside begin() / end() and is ignored.`);
-      return;
-    }
-
-    if (typeof name !== 'string' || name === '' || name === FIRST_SEGMENT) {
-      warnOnce(`mark() needs a non-empty name other than "${FIRST_SEGMENT}" (that is the segment before the first mark).`);
-      return;
-    }
-
-    const now = performance.now();
-    this.closeSegment(this._segment ?? FIRST_SEGMENT, this._segment === null ? this._frameStart : this._segmentStart, now);
-    this._segment = name;
-    this._segmentStart = now;
   }
 
   public end(): void {
     this._timer?.end();
     const now = performance.now();
     this.lastCpu = now - this._frameStart;
-    if (this._segment !== null) this.closeSegment(this._segment, this._segmentStart, now);
-    this._inFrame = false;
     this._cpuSum += this.lastCpu;
     this._frames++;
     if (this._resume) {
@@ -301,19 +260,6 @@ export class FrameSampler {
     this._resume = true;
   }
 
-  /** Average CPU time of segment `name` over the last refresh window, in ms, or null when unknown. */
-  public segment(name: string): number | null {
-    return this._segmentAverages.get(name) ?? null;
-  }
-
-  /** Average CPU ms of every segment over the last refresh window, by name. */
-  public segments(): Record<string, number> {
-    const out: Record<string, number> = {};
-    const names = Array.from(this._segmentAverages.keys());
-    for (let i = 0, l = names.length; i < l; i++) out[names[i]] = this._segmentAverages.get(names[i]) ?? 0;
-    return out;
-  }
-
   /** Closes the current sampling window and returns its averages. */
   public take(): FrameWindow {
     const now = performance.now();
@@ -325,12 +271,6 @@ export class FrameSampler {
       gpu: this.takeGpu()
     };
 
-    // Segments average over every frame of the window, so they add up to the CPU readout.
-    const names = Array.from(this._segmentSums.keys());
-    for (let i = 0, l = names.length; i < l; i++) {
-      this._segmentAverages.set(names[i], frames > 0 ? (this._segmentSums.get(names[i]) ?? 0) / frames : 0);
-    }
-
     this.resetWindow(now);
     return result;
   }
@@ -339,8 +279,6 @@ export class FrameSampler {
     this._windowStart = now;
     this._frames = 0;
     this._cpuSum = 0;
-    const names = Array.from(this._segmentSums.keys());
-    for (let i = 0, l = names.length; i < l; i++) this._segmentSums.set(names[i], 0);
   }
 
   public get calls(): number {
@@ -349,11 +287,6 @@ export class FrameSampler {
   }
 
   public get triangles(): number { return this._renderer.info.render.triangles; }
-  /** Render passes in the last frame (WebGPU only: `render()` calls between resets). */
-  public get passes(): number | null {
-    return this._renderer.isWebGPURenderer === true ? (this._renderer.info.render.frameCalls ?? null) : null;
-  }
-
   public get points(): number { return this._renderer.info.render.points; }
   public get lines(): number { return this._renderer.info.render.lines; }
   public get geometries(): number { return this._renderer.info.memory.geometries; }
@@ -374,24 +307,6 @@ export class FrameSampler {
   public dispose(): void {
     this._timer?.dispose();
     if (this._countAllPasses) this._renderer.info.autoReset = this._infoAutoReset;
-  }
-
-  private closeSegment(name: string, start: number, now: number): void {
-    const sum = this._segmentSums.get(name);
-    if (sum !== undefined) {
-      this._segmentSums.set(name, sum + now - start);
-      return;
-    }
-
-    // A mark right after begin() leaves an empty first segment: it gets no row until it has time.
-    if (name === FIRST_SEGMENT && now - start <= 0) return;
-    if (this._segmentSums.size >= MAX_SEGMENTS) {
-      warnOnce(`at most ${MAX_SEGMENTS} CPU segments are shown; "${name}" is ignored.`);
-      return;
-    }
-
-    this._segmentSums.set(name, now - start);
-    this.onSegment?.(name);
   }
 
   private takeGpu(): number | null {

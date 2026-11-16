@@ -40,15 +40,11 @@ distribution and toggles. Image and LOD are custom modes in `examples/`, not par
 
 | Feature | Entry |
 | --- | --- |
-| Readouts, counters, time graphs, frame pacing rows | core |
+| Readouts, counters, time graphs | core |
 | Objects counter (with `scene`) | core |
-| Timeline events (`stats.event()`) | core |
-| Session recording and report (`startRecording()`) | core |
-| Pressure signal for adaptive quality (`onPressure`) | core |
-| Snapshot as JSON and the global hook | core |
+| Event flags on the frame graph (`stats.event()`) | core |
 | Custom modes, metrics, graphs, histograms, distributions, toggles | core |
 | Production no-op | `@three.ez/stats/dev` |
-| Agent tools and WebMCP registration | `@three.ez/stats/agent` |
 
 ### Responsive behaviour
 
@@ -70,13 +66,13 @@ Decided after the owner's review: the overlay measures and shows, it does not ad
 - The Info mode: technical pages, the canvas thumbnail, the camera page.
 - The Mesh and Memory modes and their graphs.
 - The built-in Image mode (now an example) and its waveform and vectorscope.
-- The top-right rows (P95, PEAK, DROP, `mark()` segments) and the REC plate: pacing and
-  segments are in the snapshot, recording is an API.
+- The top-right rows (P95, PEAK, DROP, `mark()` segments) and the REC plate.
+- APIs without an interface: recording and reports, `mark()` segments, the pressure signal,
+  the snapshot, the global hook and the agent tools (`@three.ez/stats/agent`, WebMCP).
 - The merged RGB graph and its lane.
 
 ## Planned
 
-- User Timing: `mark()` segments as `performance.measure`, opt-in.
 - Report comparison: `compareReports(before, after)`.
 - Refresh rate detection for the default budget.
 - An LOD add-on, if the example proves useful as a package.

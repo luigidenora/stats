@@ -1,32 +1,29 @@
 import { resolveBudgets, type Budgets, type DeviceProfile } from './budgets.js';
 import { warnOnce } from './custom.js';
 import type { Threshold } from './format.js';
-import { FrameStats, type FramePacing } from './frame-stats.js';
-import { surveyScene, type InfoScene, type SceneSurvey } from './scene-survey.js';
 import { findMode, MODES } from './modes.js';
-import { PressureMonitor, type Pressure } from './pressure.js';
-import { Recorder, type MemoryCounters, type StatsReport } from './recorder.js';
-import { summariseScene, type StatsSnapshot } from './snapshot.js';
 import { Overlay, type FrameThresholds } from './overlay.js';
 import type { ControlDefinition, ModeContent, ModeDefinition, StatsMetric, StatsMode } from './types.js';
 import { FrameSampler, type StatsRenderer } from './sampler.js';
 
 const STORAGE_KEY = 'tez-stats-mode';
-/** The pressure signal is sampled once a second. */
-const PRESSURE_MS = 1000;
-/** A cached scene survey is reused for this long. */
-const SURVEY_FRESH_MS = 2000;
 /** The object counter walks the scene at most once a second. */
 const COUNT_MS = 1000;
-/** A survey waits at least this many times its own duration: at most 0.4% of the time, however large the scene. */
-const SURVEY_COST_FACTOR = 250;
+/** A count waits at least this many times its own duration: at most 0.4% of the time, however large the scene. */
+const COUNT_COST_FACTOR = 250;
+
+/** The subset of a three.js scene the objects counter reads. */
+export interface InfoScene {
+  // Method syntax on purpose: a THREE.Scene (whose callback takes Object3D) must be assignable.
+  traverse(callback: (object: unknown) => void): void;
+}
 
 export interface StatsOptions {
-  /** Scene for the object counter and the snapshot's scene survey. Optional. */
+  /** Scene for the objects counter. Optional. */
   scene?: InfoScene;
   /**
    * Display mode, cumulative: 'simple' (frame rate, CPU and GPU time), 'performance' (plus the heap
-   * and the counters), 'graph' (plus the time graphs and the pacing rows), 'off', or a custom mode.
+   * and the counters), 'graph' (plus the time graphs), 'off', or a custom mode.
    * Default 'simple'. A mode picked with the mode plate is remembered across page loads and wins
    * over this option, unless `remember` is false.
    */
@@ -58,24 +55,6 @@ export interface StatsOptions {
   /** Overrides single budgets of the profile, e.g. `{ calls: 500 }`. */
   budgets?: Partial<Budgets>;
   /**
-   * Called when the frame runs out of room ('high') or has plenty ('low'), and again every 2 s
-   * while it stays so: the hook for adaptive quality. See `pressure`.
-   *
-   * ```ts
-   * onPressure: (pressure) => {
-   *   if (pressure === 'high') renderer.setPixelRatio(Math.max(1, renderer.getPixelRatio() - 0.25));
-   * }
-   * ```
-   */
-  onPressure?: (pressure: Pressure) => void;
-  /** Called with the report of every finished recording (the REC plate or `stopRecording()`). */
-  onReport?: (report: StatsReport) => void;
-  /**
-   * Lists this instance in `globalThis.__THREE_EZ_STATS__`, so tools and agents driving the page
-   * can call `__THREE_EZ_STATS__[0].snapshot()`. Off by default: the overlay adds no global.
-   */
-  expose?: boolean;
-  /**
    * Sum every render() of a frame (post-processing, several views): switches
    * `renderer.info.autoReset` off while the overlay lives and resets it in begin(); restored on
    * dispose. Off by default, so `renderer.info` behaves as the app expects and the counters show
@@ -89,9 +68,6 @@ export interface StatsOptions {
    */
   gpuTimer?: boolean;
 }
-
-/** Name of the global array of live instances. */
-export const GLOBAL_HOOK = '__THREE_EZ_STATS__';
 
 /**
  * Statistics overlay for a three.js renderer.
@@ -113,17 +89,8 @@ export class Stats {
   private readonly _interval: number;
   private readonly _thresholds: FrameThresholds;
   private readonly _remember: boolean;
-  private readonly _pacing = new FrameStats();
   private readonly _profile: DeviceProfile;
   private readonly _budgets: Budgets;
-  private _lastPressure = 0;
-  /** When the cached survey was taken; -Infinity when there is none. */
-  private _surveyedAt = -Infinity;
-  private _survey: SceneSurvey | null = null;
-  /** Values of the last refresh, read by the pressure signal and the snapshot. */
-  private _lastFrame: { fps: number | null; cpu: number | null; gpu: number | null; heap: number | null } = { fps: null, cpu: null, gpu: null, heap: null };
-  /** Pacing of the last refresh, read by the p95 / worst / dropped rows. */
-  private _pacingSummary: FramePacing | null = null;
   /** The canvas box as the page lays it out. */
   private _rect = new DOMRect();
   private _scene: InfoScene | null;
@@ -133,19 +100,11 @@ export class Stats {
   private _wantedMode: string | null = null;
   /** After a hidden tab: wait one interval before refreshing, so the readouts have frames to average. */
   private _holdRefresh = false;
-  /** Duration of the last scene survey, in ms. */
-  private _surveyCost = 0;
   /** Objects in the scene at the last count, when it was taken and how long it took. */
   private _objects: number | null = null;
   private _countedAt = -Infinity;
   private _countCost = 0;
   private readonly _excluded: readonly string[];
-  private readonly _pressure = new PressureMonitor();
-  private readonly _onPressure: ((pressure: Pressure) => void) | null;
-  private readonly _onReport: ((report: StatsReport) => void) | null;
-  private _recorder: Recorder | null = null;
-  private _report: StatsReport | null = null;
-  private readonly _exposed: boolean;
   private _lastRefresh = 0;
   private _rectDirty = true;
   private readonly _onLayout = (): void => {
@@ -157,9 +116,7 @@ export class Stats {
   private readonly _onVisibility = (): void => {
     if (document.visibilityState !== 'hidden') return;
     this._sampler.pause();
-    this._pacing.reset();
     this._holdRefresh = true;
-    this._pressure.reset();
   };
 
   constructor(renderer: StatsRenderer, options: StatsOptions = {}) {
@@ -194,11 +151,7 @@ export class Stats {
     this._scene = options.scene ?? null;
     this._sampler.onGpuSample = (ms): void => {
       this._overlay.pushGpu(ms);
-      this._recorder?.gpu(ms);
     };
-
-    this._onPressure = options.onPressure ?? null;
-    this._onReport = options.onReport ?? null;
 
     const exclude = options.exclude ?? [];
     this._excluded = exclude;
@@ -218,8 +171,6 @@ export class Stats {
     window.addEventListener('scroll', this._onLayout, { passive: true, capture: true });
     document.addEventListener('visibilitychange', this._onVisibility);
     this.syncRect();
-    this._exposed = options.expose ?? false;
-    if (this._exposed) liveInstances().push(this);
   }
 
   /** Current display mode. Setting it from code does not change the remembered choice. */
@@ -276,82 +227,18 @@ export class Stats {
   /** Budgets in use: the profile's, with the `budgets` option applied. */
   public get budgets(): Readonly<Budgets> { return this._budgets; }
 
-  /** Current pressure on the frame: 'high' (no room left), 'low' (plenty) or 'ok'. See the `onPressure` option. */
-  public get pressure(): Pressure { return this._pressure.level; }
-
-  /** True between `startRecording()` and `stopRecording()`. */
-  public get recording(): boolean { return this._recorder !== null; }
-
-  /** The report of the last finished recording, or null. */
-  public get report(): StatsReport | null { return this._report; }
-
   /**
-   * Starts recording every frame for a report: averages, percentiles, the 1% low frame rate,
-   * dropped refreshes, counters, memory and events.
-   */
-  public startRecording(): this {
-    if (this._recorder !== null) return this;
-    this._recorder = new Recorder(this.memory());
-    return this;
-  }
-
-  /** Stops the recording and returns its report, or null when nothing was recorded. */
-  public stopRecording(): StatsReport | null {
-    const recorder = this._recorder;
-    if (recorder === null) return null;
-    this._recorder = null;
-    const report = recorder.finish(this.memory(), { budget: this._budget, profile: this._profile, backend: this._sampler.backend });
-    if (report === null) return null;
-    this._report = report;
-    if (this._onReport !== null) this.guard('onReport', () => this._onReport?.(report));
-    return report;
-  }
-
-  /**
-   * Marks this moment on the graphs with a flag, and in the recording by name: the way to tell
-   * what the app was doing when a frame hitched.
+   * Marks this moment on the frame graph with a flag: the way to tell what the app was doing
+   * when a frame hitched.
    *
    * ```ts
-   * stats.event('level-load');
+   * loadLevel();
+   * stats.event();
    * ```
    */
-  public event(name: string): this {
+  public event(): this {
     this._overlay.markEvent();
-    const text: unknown = name;
-    this._recorder?.event(typeof text === 'string' ? text : String(text));
     return this;
-  }
-
-  /**
-   * Everything the overlay knows right now as plain JSON: frame values, pacing, counters, the
-   * scene survey and the last report. Made for
-   * agents, tests and bug reports; cheap, but it may survey the scene, so call it on demand, not
-   * per frame.
-   */
-  public snapshot(): StatsSnapshot {
-    const sampler = this._sampler;
-    const canvas = this._renderer.domElement;
-    const survey = this._scene === null ? null : this.survey(performance.now(), SURVEY_FRESH_MS);
-    return {
-      version: 2,
-      mode: this._overlay.mode,
-      backend: sampler.backend,
-      profile: this._profile,
-      budget: this._budget,
-      budgets: { ...this._budgets },
-      frame: { ...this._lastFrame },
-      pacing: this._pacingSummary === null ? null : { ...this._pacingSummary },
-      segments: sampler.segments(),
-      counters: {
-        calls: sampler.calls, triangles: sampler.triangles, points: sampler.points, lines: sampler.lines,
-        geometries: sampler.geometries, textures: sampler.textures, programs: sampler.programs, passes: sampler.passes
-      },
-      canvas: { width: canvas.width, height: canvas.height, cssWidth: canvas.clientWidth, cssHeight: canvas.clientHeight, pixelRatio: this._renderer.getPixelRatio?.() ?? null },
-      pressure: this._pressure.level,
-      scene: survey === null ? null : summariseScene(survey),
-      recording: this.recording,
-      report: this._report
-    };
   }
 
   /** The overlay element, for custom placement or styling. */
@@ -365,13 +252,7 @@ export class Stats {
   /** Call right after rendering a frame. */
   public end(): void {
     this._sampler.end();
-    this._pacing.push(this._sampler.lastInterval);
     this._overlay.pushFrame(this._sampler.lastInterval, this._sampler.lastCpu, this._sampler.compiled);
-    const recorder = this._recorder;
-    if (recorder !== null) {
-      recorder.frame(this._sampler.lastInterval, this._sampler.lastCpu, this._sampler.calls, this._sampler.triangles);
-      if (recorder.full) this.stopRecording();
-    }
 
     const now = performance.now();
     if (this._holdRefresh) {
@@ -385,37 +266,11 @@ export class Stats {
       if (now - this._lastRefresh >= this._interval) {
         this._lastRefresh = now;
         if (this._rectDirty || this.moved()) this.syncRect();
-        this._pacingSummary = this._pacing.summary(this._budget);
-        this._lastFrame = { ...this._sampler.take(), heap: this._sampler.heap };
-        this._overlay.refresh(this._lastFrame, this._budget, this._thresholds);
-      }
-
-      // Once a second whatever the refresh interval: the pressure streaks count samples as seconds.
-      if (now - this._lastPressure >= PRESSURE_MS) {
-        this._lastPressure = now;
-        this.signalPressure();
+        this._overlay.refresh({ ...this._sampler.take(), heap: this._sampler.heap }, this._budget, this._thresholds);
       }
     } catch (error) {
       warnOnce(`a refresh failed and was skipped (${String(error)}).`);
     }
-  }
-
-  /**
-   * Splits the CPU time of a frame into named segments, read from `snapshot().segments`. The time
-   * from begin() to the first mark is 'logic'; each mark closes the previous segment and the last
-   * one ends at end(). Names show on a plate as their first 4 letters; at most 4 segments.
-   *
-   * ```ts
-   * stats.begin();
-   * world.update();
-   * stats.mark('render');
-   * renderer.render(scene, camera);
-   * stats.end();
-   * ```
-   */
-  public mark(name: string): this {
-    this._sampler.mark(name);
-    return this;
   }
 
   public addMetric(metric: StatsMetric): this {
@@ -452,11 +307,9 @@ export class Stats {
     return this;
   }
 
-  /** Scene for the object counter and the snapshot. */
+  /** Scene for the objects counter. */
   public set scene(scene: InfoScene | null) {
     this._scene = scene;
-    this._survey = null;
-    this._surveyedAt = -Infinity;
     this._objects = null;
     this._countedAt = -Infinity;
     if (scene === null) this._overlay.removeMetric('objects');
@@ -471,11 +324,6 @@ export class Stats {
     document.removeEventListener('visibilitychange', this._onVisibility);
     this._sampler.dispose();
     this._overlay.dispose();
-    if (this._exposed) {
-      const live = liveInstances();
-      const index = live.indexOf(this);
-      if (index >= 0) live.splice(index, 1);
-    }
   }
 
   /** The OBJ counter, bottom-left, while there is a scene. */
@@ -494,7 +342,7 @@ export class Stats {
   private objectCount(now: number): number | null {
     const scene = this._scene;
     if (scene === null) return null;
-    if (now - this._countedAt < Math.max(COUNT_MS, this._countCost * SURVEY_COST_FACTOR)) return this._objects;
+    if (now - this._countedAt < Math.max(COUNT_MS, this._countCost * COUNT_COST_FACTOR)) return this._objects;
     this._countedAt = now;
     const started = performance.now();
     let count = 0;
@@ -509,48 +357,6 @@ export class Stats {
 
     this._countCost = performance.now() - started;
     return this._objects;
-  }
-
-  private memory(): MemoryCounters {
-    const sampler = this._sampler;
-    return { geometries: sampler.geometries, textures: sampler.textures, programs: sampler.programs, heap: sampler.heap };
-  }
-
-  /** Runs a user callback; a throw is reported once and never reaches the frame. */
-  private guard(name: string, run: () => void): void {
-    try {
-      run();
-    } catch (error) {
-      warnOnce(`${name} threw (${String(error)}).`);
-    }
-  }
-
-  private signalPressure(): void {
-    const frame = this._lastFrame;
-    const signal = this._pressure.update(frame.cpu, frame.gpu, frame.fps, this._budget);
-    if (signal !== null && this._onPressure !== null) this.guard('onPressure', () => this._onPressure?.(signal));
-  }
-
-  /**
-   * The shared scene survey, retaken when older than `maxAge`. Null without a scene or when the
-   * scene cannot be traversed right now (e.g. mid-teardown): a survey must never break a frame.
-   */
-  private survey(now: number, maxAge: number): SceneSurvey | null {
-    if (this._scene === null) return null;
-    // A large scene takes long to walk: space the surveys out so they never become the stutter they look for.
-    if (now - this._surveyedAt < Math.max(maxAge, this._surveyCost * SURVEY_COST_FACTOR)) return this._survey;
-    this._surveyedAt = now;
-    const started = performance.now();
-    try {
-      this._survey = surveyScene(this._scene);
-    } catch (error) {
-      warnOnce(`the scene could not be surveyed (${String(error)}); the next try comes later.`);
-      this._survey = null;
-    }
-
-    this._surveyCost = performance.now() - started;
-
-    return this._survey;
   }
 
   /**
@@ -575,13 +381,6 @@ export class Stats {
     this._overlay.layout();
     this._rectDirty = false;
   }
-}
-
-/** The global array of live instances (created on first use). */
-function liveInstances(): Stats[] {
-  const scope = globalThis as unknown as Record<string, Stats[] | undefined>;
-  scope[GLOBAL_HOOK] ??= [];
-  return scope[GLOBAL_HOOK];
 }
 
 /** The mode remembered from an earlier visit, if storage is available. */

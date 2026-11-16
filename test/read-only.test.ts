@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { surveyScene } from '../src/scene-survey.js';
 import { Stats } from '../src/stats.js';
 import { fakeRenderer, must, stubCanvas2d } from './helpers.js';
 
@@ -58,15 +57,7 @@ describe('the overlay never changes the scene', () => {
     document.body.replaceChildren();
   });
 
-  it('a survey leaves every object, material, geometry and texture as it was', () => {
-    const scene = buildScene();
-    const before = fingerprint(scene);
-    surveyScene(scene);
-    surveyScene(scene);
-    expect(fingerprint(scene)).toBe(before);
-  });
-
-  it('a running overlay in every mode, with recordings and snapshots, leaves the scene as it was', () => {
+  it('a running overlay in every mode, counting the scene objects, leaves the scene as it was', () => {
     const scene = buildScene();
     const before = fingerprint(scene);
     const children = scene.children.length;
@@ -76,17 +67,13 @@ describe('the overlay never changes the scene', () => {
     const stats = new Stats(renderer, { scene, profile: 'desktop', remember: false });
     for (const mode of ['simple', 'performance', 'graph', 'off'] as const) {
       stats.mode = mode;
-      stats.startRecording();
       for (let i = 0; i < 90; i++) {
         stats.begin();
-        stats.mark('render');
         now += 16;
         stats.end();
       }
 
-      stats.event('step');
-      stats.stopRecording();
-      stats.snapshot();
+      stats.event();
     }
 
     stats.dispose();

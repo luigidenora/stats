@@ -1,31 +1,20 @@
 /**
- * Device profiles and their budgets: the limits counters turn yellow at and diagnostics compare
- * against. The numbers are industry rules of thumb for WebGL / WebGPU scenes, not specifications;
- * every limit can be overridden with `budgets`.
+ * Device profiles and their budgets: the limits the draw call and triangle counters turn yellow
+ * at. Rules of thumb for WebGL / WebGPU scenes, not specifications; override them with `budgets`.
  */
 
 export type DeviceProfile = 'mobile' | 'desktop';
 
 export interface Budgets {
-  /** Draw calls per frame. */
+  /** Draw calls per frame: the draw call counter turns yellow above it. */
   calls: number;
-  /** Triangles drawn per frame. */
+  /** Triangles drawn per frame: the triangle counter turns yellow above it. */
   triangles: number;
-  /** Renderer pixel ratio. */
-  pixelRatio: number;
-  /** Estimated texture memory, in MB. */
-  textureMB: number;
-  /** Dynamic lights (forward shading loops over all of them per fragment). */
-  lights: number;
-  /** Lights that cast shadows. */
-  shadowLights: number;
-  /** Largest shadow map side, in px. */
-  shadowMapSize: number;
 }
 
 export const PROFILE_BUDGETS: Readonly<Record<DeviceProfile, Readonly<Budgets>>> = {
-  mobile: { calls: 250, triangles: 750_000, pixelRatio: 2, textureMB: 256, lights: 4, shadowLights: 1, shadowMapSize: 2048 },
-  desktop: { calls: 1000, triangles: 3_000_000, pixelRatio: 2, textureMB: 512, lights: 8, shadowLights: 3, shadowMapSize: 4096 }
+  mobile: { calls: 250, triangles: 750_000 },
+  desktop: { calls: 1000, triangles: 3_000_000 }
 };
 
 /** What profile detection looks at; injectable for tests. */

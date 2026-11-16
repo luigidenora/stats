@@ -36,12 +36,9 @@ describe('resolveBudgets', () => {
   });
 
   it('applies valid overrides, zero included, and ignores non-finite or negative ones', () => {
-    const { budgets } = resolveBudgets('desktop', { calls: 500, triangles: Number.NaN, lights: 0, shadowLights: -1, textureMB: Infinity });
-    expect(budgets.calls).toBe(500);
-    expect(budgets.triangles).toBe(PROFILE_BUDGETS.desktop.triangles);
-    expect(budgets.lights).toBe(0);
-    expect(budgets.shadowLights).toBe(PROFILE_BUDGETS.desktop.shadowLights);
-    expect(budgets.textureMB).toBe(PROFILE_BUDGETS.desktop.textureMB);
+    expect(resolveBudgets('desktop', { calls: 500, triangles: Number.NaN }).budgets).toEqual({ calls: 500, triangles: PROFILE_BUDGETS.desktop.triangles });
+    expect(resolveBudgets('desktop', { calls: 0, triangles: -1 }).budgets).toEqual({ calls: 0, triangles: PROFILE_BUDGETS.desktop.triangles });
+    expect(resolveBudgets('desktop', { calls: Infinity }).budgets.calls).toBe(PROFILE_BUDGETS.desktop.calls);
   });
 
   it('ignores keys that are not budgets', () => {

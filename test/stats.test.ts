@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Stats, type StatsOptions } from '../src/stats.js';
-import type { InfoScene } from '../src/scene-survey.js';
+import { Stats, type InfoScene, type StatsOptions } from '../src/stats.js';
 import { fakeRenderer, must, stubCanvas2d, type FakeRenderer } from './helpers.js';
 
 let now = 0;
@@ -156,7 +155,7 @@ describe('Stats lifecycle', () => {
   });
 });
 
-describe('Stats budgets and diagnostics', () => {
+describe('Stats budgets and the scene', () => {
   it('resolves the profile and the overrides', () => {
     const { stats } = setup({ profile: 'mobile', budgets: { calls: 100 } });
     expect(stats.profile).toBe('mobile');
@@ -171,22 +170,6 @@ describe('Stats budgets and diagnostics', () => {
     });
     const calls = must(stats.element.querySelector<HTMLElement>('[data-tip^="Draw calls"]'));
     expect(calls.querySelector('.tez-alert') ?? (calls.classList.contains('tez-alert') ? calls : null)).not.toBeNull();
-  });
-
-  it('surveys a slow scene less often, so the overlay is not the hitch it reports', () => {
-    let surveys = 0;
-    const scene: InfoScene = { traverse: () => {
-      surveys++;
-      now += 100;
-    } };
-    const { stats } = setup({ scene });
-    for (let i = 0; i < 20; i++) {
-      stats.snapshot();
-      run(stats, 1);
-    }
-
-    // 100 ms per walk: one object count and one survey, then each waits 25 s.
-    expect(surveys).toBe(2);
   });
 
   it('counts the scene objects bottom-left, only with a scene, at most once a second', () => {
@@ -218,25 +201,11 @@ describe('Stats budgets and diagnostics', () => {
     const scene: InfoScene = { traverse: () => {
       throw new Error('scene in the middle of a teardown');
     } };
-    const { stats } = setup({ scene });
+    const { stats } = setup({ scene, mode: 'performance' });
     expect(() => {
-      for (let i = 0; i < 4; i++) {
-        stats.snapshot();
-        run(stats, 3);
-      }
+      run(stats, 3);
     }).not.toThrow();
-    expect(stats.snapshot().scene).toBeNull();
-  });
-
-  it('keeps a hidden-tab gap out of the frame pacing', () => {
-    const { stats } = setup({ mode: 'graph' });
-    run(stats, 1);
-    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
-    document.dispatchEvent(new Event('visibilitychange'));
-    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
-    now += 900;
-    run(stats, 1);
-    expect(must(stats.snapshot().pacing).worst).toBeLessThan(17);
+    expect(must(stats.element.querySelector('[data-tip^="Objects in the scene"]')).textContent).toContain('—');
   });
 });
 
@@ -292,104 +261,5 @@ describe('Stats custom content', () => {
     expect(() => {
       run(stats, 2);
     }).not.toThrow();
-  });
-});
-
-describe('Stats recording, events and pressure', () => {
-  it('records between start and stop and reports the run', () => {
-    const onReport = vi.fn();
-    const { stats, renderer } = setup({ onReport });
-    expect(stats.stopRecording()).toBeNull();
-    run(stats, 0.5);
-    stats.startRecording();
-    expect(stats.recording).toBe(true);
-    run(stats, 1);
-    stats.event('boss');
-    run(stats, 1, () => {
-      renderer.info.render.calls = 40;
-      renderer.info.render.triangles = 40_000;
-    });
-    const report = must(stats.stopRecording());
-    expect(stats.recording).toBe(false);
-    expect(report.frames).toBe(120);
-    expect(report.fps.average).toBeCloseTo(60, 0);
-    expect(report.fps.low1).toBeCloseTo(60, 0);
-    expect(report.calls.max).toBe(40);
-    expect(report.events).toHaveLength(1);
-    expect(report.events[0].name).toBe('boss');
-    expect(report.events[0].at).toBeCloseTo(1, 1);
-    expect(report.backend).toBe('webgl');
-    expect(stats.report).toBe(report);
-    expect(onReport).toHaveBeenCalledWith(report);
-  });
-
-  it('keeps a hidden-tab gap out of a recording', () => {
-    const { stats } = setup();
-    stats.startRecording();
-    run(stats, 1);
-    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
-    document.dispatchEvent(new Event('visibilitychange'));
-    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
-    now += 8000;
-    run(stats, 1);
-    const report = must(stats.stopRecording());
-    expect(report.duration).toBeLessThan(2.1);
-    expect(report.frame.worst).toBeLessThan(20);
-  });
-
-  it('signals pressure for adaptive quality, and survives a callback that throws', () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const seen: string[] = [];
-    const { stats } = setup({ onPressure: (pressure) => {
-      seen.push(pressure);
-      throw new Error('boom');
-    } });
-    // 14 ms of CPU on a 16.7 ms budget at 30 fps: no room left.
-    for (let i = 0; i < 150; i++) {
-      stats.begin();
-      now += 14;
-      stats.end();
-      now += 1000 / 30 - 14;
-    }
-
-    expect(seen[0]).toBe('high');
-    expect(seen.length).toBeGreaterThanOrEqual(2);
-    expect(stats.pressure).toBe('high');
-  });
-});
-
-describe('Stats snapshot for agents and tools', () => {
-  it('is plain JSON with the measurements and the scene', () => {
-    const lights: { type: string; isLight: boolean }[] = [];
-    for (let i = 0; i < 12; i++) lights.push({ type: 'PointLight', isLight: true });
-    const scene: InfoScene = { traverse: (callback) => {
-      for (const light of lights) callback(light);
-    } };
-    const { stats, renderer } = setup({ scene });
-    run(stats, 2.5, () => {
-      renderer.info.render.calls = 12;
-      renderer.info.render.triangles = 12_000;
-    });
-    const snapshot = stats.snapshot();
-    const json = JSON.parse(JSON.stringify(snapshot)) as typeof snapshot;
-    expect(json).toEqual(snapshot);
-    expect(json.version).toBe(2);
-    expect(json.frame.fps).toBeCloseTo(60, 0);
-    expect(json.pacing?.dropped).toBe(0);
-    expect(json.counters.calls).toBe(12);
-    expect(json.scene?.lights).toBe(12);
-    expect(json.scene?.lightsByType).toEqual({ PointLight: 12 });
-    expect(json.budgets.calls).toBe(1000);
-  });
-
-  it('adds no global unless asked, and lists exposed instances while they live', () => {
-    const scope = globalThis as unknown as Record<string, Stats[] | undefined>;
-    Reflect.deleteProperty(scope, '__THREE_EZ_STATS__');
-    setup();
-    expect(scope['__THREE_EZ_STATS__']).toBeUndefined();
-    const { stats } = setup({ expose: true });
-    expect(scope['__THREE_EZ_STATS__']).toEqual([stats]);
-    must(open.splice(open.indexOf(stats), 1)[0]).dispose();
-    expect(scope['__THREE_EZ_STATS__']).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FrameSampler, MAX_SEGMENTS, type StatsRenderer } from '../src/sampler.js';
+import { FrameSampler, type StatsRenderer } from '../src/sampler.js';
 import { fakeRenderer } from './helpers.js';
 
 let now = 0;
@@ -93,59 +93,6 @@ describe('FrameSampler', () => {
     expect(runWindow(sampler, 15, () => 2, 1000 / 60).fps).toBeCloseTo(60, 5);
   });
 
-  it('splits the CPU time into segments that add up to the frame', () => {
-    const sampler = new FrameSampler(fakeRenderer());
-    const seen: string[] = [];
-    sampler.onSegment = (name) => seen.push(name);
-    for (let i = 0; i < 4; i++) {
-      frame(sampler, 0, 16, () => {
-        now += 1;
-        sampler.mark('physics');
-        now += 2;
-        sampler.mark('render');
-        now += 3;
-      });
-    }
-
-    const window = sampler.take();
-    expect(seen).toEqual(['logic', 'physics', 'render']);
-    expect(sampler.segment('logic')).toBeCloseTo(1);
-    expect(sampler.segment('physics')).toBeCloseTo(2);
-    expect(sampler.segment('render')).toBeCloseTo(3);
-    expect(window.cpu).toBeCloseTo(6);
-    expect(sampler.segment('missing')).toBeNull();
-  });
-
-  it('gives no row to an empty first segment', () => {
-    const sampler = new FrameSampler(fakeRenderer());
-    const seen: string[] = [];
-    sampler.onSegment = (name) => seen.push(name);
-    frame(sampler, 0, 16, () => {
-      sampler.mark('render');
-      now += 3;
-    });
-    expect(seen).toEqual(['render']);
-  });
-
-  it('warns and ignores marks outside a frame, reserved names and segments past the limit', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const sampler = new FrameSampler(fakeRenderer());
-    const seen: string[] = [];
-    sampler.onSegment = (name) => seen.push(name);
-    sampler.mark('outside');
-    frame(sampler, 0, 16, () => {
-      now += 1;
-      sampler.mark('logic');
-      sampler.mark('');
-      for (let i = 0; i < MAX_SEGMENTS + 2; i++) {
-        sampler.mark(`s${i}`);
-        now += 1;
-      }
-    });
-    expect(seen).toHaveLength(MAX_SEGMENTS);
-    expect(warn).toHaveBeenCalled();
-  });
-
   it('flags the frames that created a shader program', () => {
     const programs: unknown[] = [{}];
     const sampler = new FrameSampler(fakeRenderer({ programs }));
@@ -165,7 +112,6 @@ describe('FrameSampler', () => {
     gl.info.render.drawCalls = 99;
     expect(glSampler.backend).toBe('webgl');
     expect(glSampler.calls).toBe(12);
-    expect(glSampler.passes).toBeNull();
 
     const gpu = fakeRenderer({ webgpu: true });
     const gpuSampler = new FrameSampler(gpu);
@@ -173,7 +119,6 @@ describe('FrameSampler', () => {
     gpu.info.render.frameCalls = 3;
     expect(gpuSampler.backend).toBe('webgpu');
     expect(gpuSampler.calls).toBe(7);
-    expect(gpuSampler.passes).toBe(3);
     expect(gpuSampler.programs).toBeNull();
     (gpu.info.memory as { programs?: number }).programs = 5;
     expect(gpuSampler.programs).toBe(5);
