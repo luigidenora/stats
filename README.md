@@ -6,7 +6,7 @@ on the scene. Three levels of detail, one plate to switch between them.
 
 ![Graph mode: frame, CPU and GPU graphs with the frame pacing rows](docs/images/graph.png)
 
-**[Live demo](https://three-ez-stats.vercel.app)** · [Graph showcase](https://three-ez-stats.vercel.app/showcase.html) · [Extending guide](docs/extending.md) · [For agents](docs/agents.md)
+**[Live demo](https://three-ez-stats.vercel.app)** · [Guided tour](https://three-ez-stats.vercel.app/?tour) · [Graph showcase](https://three-ez-stats.vercel.app/showcase.html) · [Extending guide](docs/extending.md) · [For agents](docs/agents.md)
 
 ```sh
 npm install @three.ez/stats

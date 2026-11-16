@@ -106,6 +106,19 @@ async function main() {
   addImageMode(stats, renderer.domElement);
   // Offers the overlay to in-browser agents (WebMCP) where the browser supports it.
   registerAgentTools(stats);
+  // ?tour plays the guided tour (?tour=manual steps by hand); it loads only then.
+  if (params.has('tour')) {
+    // Each call gives a crate a material type it has not used: a new shader program, compiled live.
+    const variants = [THREE.MeshLambertMaterial, THREE.MeshPhongMaterial, THREE.MeshToonMaterial, THREE.MeshNormalMaterial];
+    let variant = 0;
+    const compileShader = (): void => {
+      const crate = scene.getObjectByName('crate 1') as InstanceType<typeof THREE.Mesh> | undefined;
+      const Material = variants[variant++ % variants.length];
+      if (crate !== undefined) crate.material = new Material();
+    };
+
+    void import('./tour.js').then(({ startTour }) => startTour({ stats, compileShader }, { autoplay: params.get('tour') !== 'manual' }));
+  }
   let wasNear = false;
   let motion = 0;
   let last = 0;
