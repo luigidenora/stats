@@ -56,8 +56,9 @@ export function agentTools(stats: Stats): AgentTool[] {
     },
     {
       name: 'three_stats_set_mode',
-      description: 'Switches what the overlay shows on screen: "simple", "performance", "mesh", "memory", "image", "info" or "off". '
-        + 'Returns the mode in use. It does not change what is measured.',
+      description: 'Switches what the overlay shows on screen: "simple" (frame rate, CPU and GPU time), "performance" (plus heap and '
+        + 'renderer counters), "graph" (plus time graphs and frame pacing), "off", or a custom mode the page defined. Returns the mode in use. '
+        + 'It does not change what is measured.',
       inputSchema: { type: 'object', properties: { mode: { type: 'string', description: 'The mode id.' } }, required: ['mode'] },
       run: async (input): Promise<{ mode: string }> => {
         if (typeof input['mode'] === 'string') stats.mode = input['mode'];

@@ -142,66 +142,6 @@ const CSS = `
 .tez-c-band { grid-area: band; justify-self: start; align-self: start; }
 .tez-c-side { grid-area: side; justify-self: end; align-self: center; }
 .tez-c-hist { grid-area: hist; justify-self: start; align-self: start; }
-.tez-c-thumb, .tez-c-pages { display: none; }
-/* INFO: the canvas shrinks into the thumbnail; a near-black backdrop covers everything else
-   (the thumbnail's own shadow, so the canvas shows through it untouched). */
-.tez-info { overflow: hidden; }
-.tez-info .tez-c-thumb {
-  display: block;
-  grid-area: thumb;
-  align-self: start;
-  border: 1px solid var(--tez-ink);
-  box-shadow: 0 0 0 200vmax var(--tez-backdrop);
-  pointer-events: none;
-}
-.tez-info .tez-c-pages {
-  display: block;
-  grid-area: pages;
-  align-self: stretch;
-  min-width: 0;
-  min-height: 0;
-  /* Long pages scroll inside their cell, so counters and plates always stay on screen. */
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--tez-ink) transparent;
-  pointer-events: auto;
-}
-.tez-info .tez-c-strip, .tez-info .tez-c-side, .tez-info .tez-c-rows { display: none; }
-.tez-stats.tez-info {
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  grid-template-areas: 'band band' 'thumb pages' 'hist pages' '. pages' 'counters backend';
-  row-gap: var(--tez-space-3);
-  column-gap: var(--tez-space-5);
-}
-.tez-stats.tez-info.tez-info-narrow {
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  grid-template-areas: 'band band' 'thumb thumb' 'hist hist' 'pages pages' 'counters backend';
-}
-/* The info page: like a camera's detailed info screen, label left, value right, hairline rules. */
-.tez-info-head {
-  display: flex;
-  justify-content: space-between;
-  padding-bottom: var(--tez-space-2);
-  border-bottom: 1px solid var(--tez-ink);
-  font-size: var(--tez-size-row);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-.tez-info-count { color: var(--tez-alert); }
-.tez-info-rows { display: grid; }
-.tez-info-row {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--tez-space-4);
-  padding: var(--tez-space-2) 0;
-  border-bottom: 1px solid var(--tez-rule);
-  font-size: var(--tez-size-row);
-}
-.tez-info-key { font-size: var(--tez-size-unit); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
-.tez-info-value { text-align: right; overflow-wrap: anywhere; }
 .tez-c-hist:empty { display: none; }
 /* Large histogram: label left, plot with its axis row underneath, summary right. */
 .tez-histogram { align-items: start; }
@@ -329,22 +269,6 @@ const CSS = `
 .tez-off .tez-c:not(.tez-c-backend), .tez-off .tez-c-backend > :not(.tez-disp) { visibility: hidden; }
 /* Leaving elements: a still copy that slides out; never interactive. */
 .tez-ghost, .tez-ghost * { pointer-events: none !important; }
-/* Image mode aids over the canvas. The zebra is the 256×144 image copy stretched: chunky stripes on purpose. */
-/* z-index -1: positioned, yet under the in-flow cells (the fixed root is their stacking context). */
-.tez-zebra, .tez-guides { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
-.tez-zebra { image-rendering: pixelated; }
-/* Guides: 1px ink lines with the dark contour on both sides. */
-.tez-guide { position: absolute; background: var(--tez-ink); box-shadow: 0 0 0 1px var(--tez-contour, rgb(0 0 0 / 0.85)); opacity: 0.8; }
-.tez-guide-0, .tez-guide-1 { top: 0; bottom: 0; width: 1px; }
-.tez-guide-0 { left: 33.333%; }
-.tez-guide-1 { left: 66.667%; }
-.tez-guide-2, .tez-guide-3 { left: 0; right: 0; height: 1px; }
-.tez-guide-2 { top: 33.333%; }
-.tez-guide-3 { top: 66.667%; }
-/* Centre mark: a 9px cross. */
-.tez-guide-4 { left: calc(50% - 4px); top: 50%; width: 9px; height: 1px; }
-.tez-guide-4::after { content: ''; position: absolute; left: 4px; top: -4px; width: 1px; height: 9px; background: var(--tez-ink); box-shadow: 0 0 0 1px var(--tez-contour, rgb(0 0 0 / 0.85)); }
-.tez-scope { align-items: end; }
 .tez-disp-off { opacity: 0.55; }
 .tez-stacked {
   grid-template-columns: minmax(0, 1fr) auto;

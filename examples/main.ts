@@ -92,8 +92,6 @@ async function main() {
 
   const stats = new Stats(renderer, {
     scene,
-    // The INFO Camera page and the depth precision check.
-    camera,
     // Every finished recording (the REC plate in Performance mode) lands here.
     onReport: (report) => {
       console.table({ 'FPS average': report.fps.average, 'FPS 1% low': report.fps.low1, 'Frame P95 (ms)': report.frame.p95, 'Frame P99 (ms)': report.frame.p99, Dropped: report.dropped });

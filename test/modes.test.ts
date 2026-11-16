@@ -71,8 +71,8 @@ describe('mode plate', () => {
     const items = menu.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]');
     expect(items).toHaveLength(MODES.length);
     expect(menu.querySelector('[aria-checked="true"]')?.getAttribute('data-mode')).toBe('simple');
-    must(menu.querySelector<HTMLButtonElement>('[data-mode="memory"]')).click();
-    expect(stats.mode).toBe('memory');
+    must(menu.querySelector<HTMLButtonElement>('[data-mode="graph"]')).click();
+    expect(stats.mode).toBe('graph');
     expect(menu.hidden).toBe(true);
 
     caret.click();
@@ -97,24 +97,28 @@ describe('mode plate', () => {
 });
 
 describe('modes', () => {
-  it('marks Off and Info on the root', () => {
+  it('marks Off on the root', () => {
     const stats = setup();
     stats.mode = 'off';
     expect(stats.element.classList.contains('tez-off')).toBe(true);
     expect(stats.element.dataset['mode']).toBe('off');
-    stats.mode = 'info';
-    expect(stats.element.classList.contains('tez-info')).toBe(true);
   });
 
-  it('turns INFO pages with the PAGE plate', () => {
-    const stats = setup({ mode: 'info' });
+  it('builds up the modes: Simple, then the heap and counters, then the graphs and pacing rows', () => {
+    const stats = setup({ mode: 'simple' });
     run(stats, 0.5);
-    const title = q(stats, '.tez-info-title');
-    expect(title.textContent).toBe('RENDERER');
-    expect(q(stats, '.tez-info-count').textContent).toBe('1/5');
-    q(stats, '.tez-pager').click();
-    expect(title.textContent).toBe('LIMITS');
-    expect(q(stats, '.tez-info-count').textContent).toBe('2/5');
+    const heap = q(stats, '[data-tip^="JS heap"]');
+    const counters = q(stats, '.tez-c-counters');
+    const p95 = q(stats, '[data-tip^="P95"]');
+    const rec = must(Array.from(stats.element.querySelectorAll('button')).find((button) => button.textContent === 'REC'));
+    expect([heap.hidden, counters.hidden, p95.hidden, rec.hidden]).toEqual([true, true, true, true]);
+    stats.mode = 'performance';
+    expect([heap.hidden, counters.hidden, p95.hidden, rec.hidden]).toEqual([false, false, true, true]);
+    stats.mode = 'graph';
+    expect([heap.hidden, counters.hidden, p95.hidden, rec.hidden]).toEqual([false, false, false, false]);
+    stats.defineMode({ id: 'custom', name: 'Custom', code: 'CUST', description: 'x' });
+    stats.mode = 'custom';
+    expect([heap.hidden, counters.hidden, p95.hidden]).toEqual([false, false, true]);
   });
 
   it('adds a custom mode to the cycle before Off, with its graphs, metrics, distribution and controls', () => {
@@ -178,8 +182,8 @@ describe('modes', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const stats = setup();
     const graph = { id: 'lod.switches', label: ['LOD', 'SW/S'] as const, scale: 'auto' as const, unit: 'sw/s', read: () => 1 };
-    stats.extendMode('mesh', { graphs: [graph] });
-    stats.extendMode('mesh', { graphs: [graph] });
+    stats.extendMode('performance', { graphs: [graph] });
+    stats.extendMode('performance', { graphs: [graph] });
     expect(warn.mock.calls.some((call) => String(call[0]).includes('lod.switches'))).toBe(true);
   });
 
@@ -196,30 +200,6 @@ describe('modes', () => {
     expect(() => {
       run(stats, 1);
     }).not.toThrow();
-  });
-
-  it('shows the image aids only in Image mode: scopes, ZEBRA, GRID and the pixel row', () => {
-    const stats = setup({ mode: 'image' });
-    run(stats, 0.5);
-    const button = (label: string): HTMLButtonElement => must(Array.from(stats.element.querySelectorAll('button')).find((entry) => entry.textContent === label), label);
-    const zebra = q(stats, '.tez-zebra');
-    const guides = q(stats, '.tez-guides');
-    expect(zebra.hidden).toBe(true);
-    button('ZEBRA').click();
-    button('GRID').click();
-    expect(zebra.hidden).toBe(false);
-    expect(guides.hidden).toBe(false);
-    expect(q(stats, '[data-tip^="Pixel under the pointer"]').hidden).toBe(false);
-    expect(() => {
-      run(stats, 0.5);
-    }).not.toThrow();
-    stats.mode = 'simple';
-    expect(zebra.hidden).toBe(true);
-    expect(guides.hidden).toBe(true);
-    expect(button('ZEBRA').hidden).toBe(true);
-    expect(q(stats, '[data-tip^="Pixel under the pointer"]').hidden).toBe(true);
-    stats.mode = 'image';
-    expect(zebra.hidden).toBe(false);
   });
 
   it('extends a built-in mode', () => {

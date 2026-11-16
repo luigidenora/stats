@@ -15,7 +15,7 @@ interface Scenario {
   /** Restart the simulation every `restart` frames (to show the warm-up). */
   restart?: number;
   frame: (t: number, budget: number) => Frame;
-  /** Display mode of the card. Default 'performance'. */
+  /** Display mode of the card. Default 'graph'. */
   mode?: StatsMode;
   /** JS heap in MB at frame `t`. Default: a normal garbage-collected sawtooth around 40 MB. */
   heap?: (t: number) => number;
@@ -103,14 +103,6 @@ const scenarios: Scenario[] = [
     frame: (t, b) => ({ interval: t < 6 ? b * 3 : gauss(b, 0.3), cpu: pos(t < 6 ? 40 : gauss(2, 0.4)), gpu: pos(gauss(4, 0.6)) })
   },
   {
-    title: 'Memory leak',
-    tag: 'heap',
-    mode: 'memory',
-    note: 'The heap climbs and the garbage collector never brings it back down: the memory graph keeps rising. A sign of objects kept alive by mistake.',
-    frame: (_, b) => ({ interval: gauss(b, 0.3), cpu: pos(gauss(2.5, 0.5)), gpu: pos(gauss(4, 0.7)) }),
-    heap: (t) => 40 + t * 0.05 + ((t % 300) / 300) * 4
-  },
-  {
     title: 'Hitches on a bright scene',
     tag: 'contrast',
     bright: true,
@@ -126,7 +118,7 @@ const cards: Card[] = [];
 
 function mount(scenario: Scenario, stage: HTMLElement): Overlay {
   const budget = 1000 / (scenario.hz ?? 60);
-  const overlay = new Overlay(budget, { mode: scenario.mode ?? 'performance' });
+  const overlay = new Overlay(budget, { mode: scenario.mode ?? 'graph' });
   overlay.setBackend('webgl');
   stage.replaceChildren(overlay.root);
   overlay.layout();

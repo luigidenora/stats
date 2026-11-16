@@ -58,12 +58,12 @@ describe('Stats lifecycle', () => {
 
   it('remembers a mode picked with the plate, not one set from code', () => {
     const { stats } = setup();
-    stats.mode = 'memory';
+    stats.mode = 'graph';
     expect(localStorage.getItem('tez-stats-mode')).toBeNull();
     const plate = must(stats.element.querySelector<HTMLButtonElement>('.tez-disp-button'));
     plate.click();
     const picked = stats.mode;
-    expect(picked).not.toBe('memory');
+    expect(picked).not.toBe('graph');
     expect(localStorage.getItem('tez-stats-mode')).toBe(picked);
     expect(setup().stats.mode).toBe(picked);
     expect(setup({ remember: false, mode: 'simple' }).stats.mode).toBe('simple');
@@ -92,7 +92,7 @@ describe('Stats lifecycle', () => {
   });
 
   it('ignores the remembered mode when the overlay is not interactive (no plate to change it)', () => {
-    localStorage.setItem('tez-stats-mode', 'memory');
+    localStorage.setItem('tez-stats-mode', 'graph');
     expect(setup({ interactive: false, mode: 'performance' }).stats.mode).toBe('performance');
   });
 
@@ -154,7 +154,7 @@ describe('Stats budgets and diagnostics', () => {
   });
 
   it('turns the draw call counter yellow above the profile budget', () => {
-    const { stats, renderer } = setup({ budgets: { calls: 5 }, mode: 'mesh' });
+    const { stats, renderer } = setup({ budgets: { calls: 5 }, mode: 'performance' });
     run(stats, 0.5, () => {
       renderer.info.render.calls = 50;
     });
@@ -183,15 +183,18 @@ describe('Stats budgets and diagnostics', () => {
     const scene: InfoScene = { traverse: () => {
       throw new Error('scene in the middle of a teardown');
     } };
-    const { stats } = setup({ scene, mode: 'info' });
+    const { stats } = setup({ scene });
     expect(() => {
-      run(stats, 12);
+      for (let i = 0; i < 4; i++) {
+        stats.snapshot();
+        run(stats, 3);
+      }
     }).not.toThrow();
-    for (let i = 0; i < 5; i++) must(stats.element.querySelector<HTMLButtonElement>('.tez-pager')).click();
+    expect(stats.snapshot().scene).toBeNull();
   });
 
   it('keeps a hidden-tab gap out of the pacing rows', () => {
-    const { stats } = setup({ mode: 'performance' });
+    const { stats } = setup({ mode: 'graph' });
     run(stats, 1);
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
     document.dispatchEvent(new Event('visibilitychange'));
@@ -287,7 +290,7 @@ describe('Stats recording, events and pressure', () => {
   });
 
   it('records from the REC plate too, and shows the plate on while recording from code', () => {
-    const { stats } = setup({ mode: 'performance' });
+    const { stats } = setup({ mode: 'graph' });
     const rec = must(Array.from(stats.element.querySelectorAll('button')).find((button) => button.textContent === 'REC'));
     rec.click();
     expect(stats.recording).toBe(true);
@@ -338,14 +341,13 @@ describe('Stats recording, events and pressure', () => {
 });
 
 describe('Stats snapshot for agents and tools', () => {
-  it('is plain JSON with the measurements, the scene and the camera', () => {
+  it('is plain JSON with the measurements and the scene', () => {
     const lights: { type: string; isLight: boolean }[] = [];
     for (let i = 0; i < 12; i++) lights.push({ type: 'PointLight', isLight: true });
     const scene: InfoScene = { traverse: (callback) => {
       for (const light of lights) callback(light);
     } };
-    const camera = { type: 'PerspectiveCamera', isPerspectiveCamera: true, fov: 50, near: 0.001, far: 5000, position: { x: 1, y: 2, z: 3 } };
-    const { stats, renderer } = setup({ scene, camera });
+    const { stats, renderer } = setup({ scene });
     run(stats, 2.5, () => {
       renderer.info.render.calls = 12;
       renderer.info.render.triangles = 12_000;
@@ -359,7 +361,6 @@ describe('Stats snapshot for agents and tools', () => {
     expect(json.counters.calls).toBe(12);
     expect(json.scene?.lights).toBe(12);
     expect(json.scene?.lightsByType).toEqual({ PointLight: 12 });
-    expect(json.camera).toEqual({ type: 'PerspectiveCamera', fov: 50, near: 0.001, far: 5000, position: [1, 2, 3] });
     expect(json.budgets.calls).toBe(1000);
   });
 

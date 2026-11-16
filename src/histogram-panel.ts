@@ -6,9 +6,8 @@
 
 import { finite, safeRead, type Panel } from './custom.js';
 import { el, hit, setLabel, setText, stack } from './dom.js';
-import { formatCount, formatPercent } from './format.js';
+import { formatCount } from './format.js';
 import { binValues, HistogramGraph, position, type HistogramScale } from './histogram.js';
-import { IMAGE_BINS, type ImageSampler } from './image.js';
 import { setTip } from './tooltip.js';
 import type { HistogramDefinition, TipContent } from './types.js';
 
@@ -117,55 +116,6 @@ export function histogramPanel(definition: HistogramDefinition, budgetWarn: (mes
       setText(parts.top, formatCount(top));
       setText(parts.bottom, `${count} CH`);
       setLabel(graph.element, `${tip} ${formatCount(scale.min)} to ${formatCount(scale.max)} ${definition.unit}: ${detail.join(', ')}.`);
-    }
-  };
-}
-
-/** The built-in histogram of the rendered image: R, G and B channels, clipping on the right. */
-export function imageHistogramPanel(sampler: ImageSampler, capture: () => boolean): HistogramPanel {
-  const tip = 'Channels of the rendered image after tone mapping, 0 to 255. White where R, G and B agree (neutral tones), '
-    + 'coloured fringes for casts. Yellow edges: highlights clipped (right) or blacks crushed (left) on more than 1% of pixels.';
-  const graph = new HistogramGraph(HISTOGRAM_WIDTH, HISTOGRAM_HEIGHT, tip);
-  const parts = frame(['RGB', 'IMG'], graph, ['R', 'G', 'B'], tip, {
-    title: 'Image histogram',
-    text: 'Red, green and blue of the rendered image after tone mapping, 0 (black) to 255 (white); height is the pixel count, square-root scale.',
-    legend: [
-      { mark: 'r', text: 'Red channel' },
-      { mark: 'g', text: 'Green channel' },
-      { mark: 'b', text: 'Blue channel' },
-      { mark: 'ink', text: 'All three agree: neutral greys' },
-      { mark: 'alert', text: 'Edge mark: over 1% of pixels clipped (right) or crushed (left)' }
-    ],
-    values: () => (sampler.valid
-      ? [['Highlights clipped', formatPercent(sampler.clippedHigh * 100)], ['Blacks crushed', formatPercent(sampler.clippedLow * 100)]]
-      : [['Canvas', 'not readable']]),
-    advice: 'Clipped highlights: lower toneMappingExposure or the light intensity; a colour cast: check light colours and the environment map.'
-  });
-  setText(parts.axisMin, '0');
-  setText(parts.axisMax, '255');
-  const channels = [sampler.red, sampler.green, sampler.blue];
-  const empty = [new Float32Array(IMAGE_BINS)];
-  return {
-    element: parts.element,
-    timing: 'refresh',
-    setWidth: (px) => {
-      graph.setWidth(px);
-    },
-    sample: () => {
-      capture();
-    },
-    draw: (colors) => {
-      graph.draw(sampler.valid ? channels : empty, [], colors, { low: sampler.clippedLow > 0.01, high: sampler.clippedHigh > 0.01 });
-    },
-    describe: () => {
-      const valid = sampler.valid;
-      setText(parts.top, valid ? `HI ${formatPercent(sampler.clippedHigh * 100)}` : '—');
-      setText(parts.bottom, valid ? `LO ${formatPercent(sampler.clippedLow * 100)}` : '');
-      parts.top.classList.toggle('tez-alert', valid && sampler.clippedHigh > 0.01);
-      parts.bottom.classList.toggle('tez-alert', valid && sampler.clippedLow > 0.01);
-      setLabel(graph.element, valid
-        ? `${tip} Now: ${formatPercent(sampler.clippedHigh * 100)} clipped highlights, ${formatPercent(sampler.clippedLow * 100)} crushed blacks.`
-        : `${tip} Unavailable: the canvas could not be read.`);
     }
   };
 }

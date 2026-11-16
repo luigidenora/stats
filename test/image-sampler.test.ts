@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ImageSampler } from '../src/image.js';
+import { ImageSampler } from '../examples/image-sampler.js';
 
 afterEach(() => {
   vi.restoreAllMocks();

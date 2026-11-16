@@ -1,10 +1,7 @@
 import { resolveBudgets, type Budgets, type DeviceProfile } from './budgets.js';
-import type { InfoCamera } from './camera.js';
-import { CanvasFit } from './canvas-fit.js';
 import { warnOnce } from './custom.js';
 import { formatCount, formatInt, formatMs, type Threshold } from './format.js';
 import { FrameStats, type FramePacing } from './frame-stats.js';
-import { buildPage, INFO_PAGES } from './info.js';
 import { surveyScene, type InfoScene, type SceneSurvey } from './scene-survey.js';
 import { findMode, MODES } from './modes.js';
 import { PressureMonitor, type Pressure } from './pressure.js';
@@ -23,12 +20,13 @@ const SURVEY_FRESH_MS = 2000;
 const SURVEY_COST_FACTOR = 250;
 
 export interface StatsOptions {
-  /** Scene for the INFO mode's scene summary (objects, meshes, lights, materials, textures). Optional. */
+  /** Scene for the object counter and the snapshot's scene survey. Optional. */
   scene?: InfoScene;
   /**
-   * Display mode: 'simple' (readouts only), 'performance', 'mesh', 'memory', 'image' (readouts plus
-   * that work's graphs), 'info' (technical pages, canvas as a thumbnail) or 'off'. Default 'simple'. A mode picked with the mode plate is remembered across page
-   * loads and wins over this option, unless `remember` is false.
+   * Display mode, cumulative: 'simple' (frame rate, CPU and GPU time), 'performance' (plus the heap
+   * and the counters), 'graph' (plus the time graphs and the pacing rows), 'off', or a custom mode.
+   * Default 'simple'. A mode picked with the mode plate is remembered across page loads and wins
+   * over this option, unless `remember` is false.
    */
   mode?: StatsMode;
   /** Remember the mode picked with the mode plate across page loads (localStorage). Default true. */
@@ -44,8 +42,8 @@ export interface StatsOptions {
   /** Alert bounds for frame timing. Defaults: fps below 90% of the target rate, cpu and gpu above the budget. */
   thresholds?: FrameThresholds;
   /**
-   * Turn off built-in metrics by id: the counters 'calls', 'triangles', 'points', 'lines', 'geometries',
-   * 'textures', 'programs', and the Performance rows 'p95', 'worst', 'dropped'.
+   * Turn off built-ins by id: the counters 'calls', 'triangles', 'points', 'lines', 'geometries',
+   * 'textures', 'programs', the Graph rows 'p95', 'worst', 'dropped', and the 'rec' plate.
    */
   exclude?: readonly string[];
   /** Extra metrics, added after the built-in ones. */
@@ -57,8 +55,6 @@ export interface StatsOptions {
   profile?: 'auto' | DeviceProfile;
   /** Overrides single budgets of the profile, e.g. `{ calls: 500 }`. */
   budgets?: Partial<Budgets>;
-  /** Camera for the INFO Camera page and the depth precision check. Optional. */
-  camera?: InfoCamera;
   /**
    * Called when the frame runs out of room ('high') or has plenty ('low'), and again every 2 s
    * while it stays so: the hook for adaptive quality. See `pressure`.
@@ -102,7 +98,6 @@ export class Stats {
   private readonly _interval: number;
   private readonly _thresholds: FrameThresholds;
   private readonly _remember: boolean;
-  private readonly _fit: CanvasFit;
   private readonly _pacing = new FrameStats();
   private readonly _profile: DeviceProfile;
   private readonly _budgets: Budgets;
@@ -114,7 +109,7 @@ export class Stats {
   private _lastFrame: { fps: number | null; cpu: number | null; gpu: number | null; heap: number | null } = { fps: null, cpu: null, gpu: null, heap: null };
   /** Pacing of the last refresh, read by the p95 / worst / dropped rows. */
   private _pacingSummary: FramePacing | null = null;
-  /** The canvas box as the page lays it out (measured with the INFO transform removed). */
+  /** The canvas box as the page lays it out. */
   private _rect = new DOMRect();
   private _scene: InfoScene | null;
   /** A remembered custom mode that is not defined yet: applied as soon as defineMode() adds it. */
@@ -125,7 +120,6 @@ export class Stats {
   private _holdRefresh = false;
   /** Duration of the last scene survey, in ms. */
   private _surveyCost = 0;
-  private _camera: InfoCamera | null;
   private readonly _pressure = new PressureMonitor();
   private readonly _onPressure: ((pressure: Pressure) => void) | null;
   private readonly _onReport: ((report: StatsReport) => void) | null;
@@ -159,7 +153,6 @@ export class Stats {
     const resolved = resolveBudgets(options.profile ?? 'auto', options.budgets);
     this._profile = resolved.profile;
     this._budgets = resolved.budgets;
-    this._fit = new CanvasFit(renderer.domElement);
     const stored = this._remember ? storedMode() : null;
     const builtin = stored !== null && findMode(MODES, stored) !== null;
     // A custom mode (remembered, or asked for in the options) applies as soon as defineMode() adds it.
@@ -175,30 +168,15 @@ export class Stats {
         this._pendingMode = null;
         this._wantedMode = null;
         if (this._remember) storeMode(mode);
-      },
-      onLayout: () => {
-        this._fit.apply(this._rect, this._overlay.thumbRect());
       }
     });
     this._overlay.setBackend(this._sampler.backend);
-    this._overlay.setImageSource(renderer.domElement);
     this._scene = options.scene ?? null;
-    this._overlay.setInfoSource(INFO_PAGES, (index) => buildPage(index, renderer, this._sampler.backend, {
-      survey: () => (this._scene === null ? undefined : this.survey(performance.now(), SURVEY_FRESH_MS)),
-      budgets: this._budgets,
-      camera: () => this._camera
-    }));
-    // The Mesh and Memory graphs read the renderer, not the counter rows (which `exclude` may drop).
-    this._overlay.setCounters({
-      calls: () => this._sampler.calls, triangles: () => this._sampler.triangles,
-      geometries: () => this._sampler.geometries, textures: () => this._sampler.textures
-    });
     this._sampler.onGpuSample = (ms): void => {
       this._overlay.pushGpu(ms);
       this._recorder?.gpu(ms);
     };
 
-    this._camera = options.camera ?? null;
     this._onPressure = options.onPressure ?? null;
     this._onReport = options.onReport ?? null;
 
@@ -215,27 +193,6 @@ export class Stats {
     const extra = options.metrics ?? [];
     for (let i = 0, l = extra.length; i < l; i++) this._overlay.addMetric(extra[i]);
     if (!exclude.includes('rec')) this._overlay.addControl(this.recControl());
-    if (!exclude.includes('zebra')) {
-      this._overlay.addControl({
-        id: 'zebra', label: 'ZEBRA', modes: ['image'],
-        description: 'Stripes over clipped highlights (a channel at 250 or more of 255), drawn on the canvas.',
-        onChange: (on) => {
-          this._overlay.setZebra(on);
-        }
-      });
-    }
-
-    if (!exclude.includes('grid')) {
-      this._overlay.addControl({
-        id: 'grid', label: 'GRID', modes: ['image'],
-        description: 'Framing guides over the canvas: rule-of-thirds lines and a centre mark.',
-        onChange: (on) => {
-          this._overlay.setGuides(on);
-        }
-      });
-    }
-
-    if (!exclude.includes('pixel')) this._overlay.addMetric(pixelMetric(() => this._overlay.pixelAt()));
 
     document.body.appendChild(this._overlay.root);
     this._resizeObserver = new ResizeObserver(this._onLayout);
@@ -314,7 +271,7 @@ export class Stats {
   /**
    * Starts recording every frame for a report: averages, percentiles, the 1% low frame rate,
    * dropped refreshes, counters, memory and events. The REC plate
-   * (Performance mode) does the same.
+   * (Graph mode) does the same.
    */
   public startRecording(): this {
     if (this._recorder !== null) return this;
@@ -353,14 +310,13 @@ export class Stats {
 
   /**
    * Everything the overlay knows right now as plain JSON: frame values, pacing, counters, the
-   * scene survey, the camera and the last report. Made for
+   * scene survey and the last report. Made for
    * agents, tests and bug reports; cheap, but it may survey the scene, so call it on demand, not
    * per frame.
    */
   public snapshot(): StatsSnapshot {
     const sampler = this._sampler;
     const canvas = this._renderer.domElement;
-    const camera = this._camera;
     const survey = this._scene === null ? null : this.survey(performance.now(), SURVEY_FRESH_MS);
     return {
       version: 2,
@@ -378,9 +334,6 @@ export class Stats {
       canvas: { width: canvas.width, height: canvas.height, cssWidth: canvas.clientWidth, cssHeight: canvas.clientHeight, pixelRatio: this._renderer.getPixelRatio?.() ?? null },
       pressure: this._pressure.level,
       scene: survey === null ? null : summariseScene(survey),
-      camera: camera === null
-        ? null
-        : { type: camera.type ?? 'Camera', fov: camera.isPerspectiveCamera === true ? (camera.fov ?? null) : null, near: camera.near, far: camera.far, position: [camera.position.x, camera.position.y, camera.position.z] },
       recording: this.recording,
       report: this._report
     };
@@ -433,7 +386,7 @@ export class Stats {
   }
 
   /**
-   * Splits the CPU time of a frame into named segments, shown as rows in Performance mode. The time
+   * Splits the CPU time of a frame into named segments, shown as rows in Graph mode. The time
    * from begin() to the first mark is 'logic'; each mark closes the previous segment and the last
    * one ends at end(). Names show on a plate as their first 4 letters; at most 4 segments.
    *
@@ -484,21 +437,15 @@ export class Stats {
     return this;
   }
 
-  /** Scene for the INFO mode's scene summary and the snapshot. */
+  /** Scene for the object counter and the snapshot. */
   public set scene(scene: InfoScene | null) {
     this._scene = scene;
     this._survey = null;
     this._surveyedAt = -Infinity;
   }
 
-  /** Camera for the INFO Camera page and the depth precision check. */
-  public set camera(camera: InfoCamera | null) {
-    this._camera = camera;
-  }
-
-  /** Removes the overlay and restores the renderer's info settings and canvas. */
+  /** Removes the overlay and restores the renderer's info settings. */
   public dispose(): void {
-    this._fit.clear();
     this._resizeObserver.disconnect();
     window.removeEventListener('resize', this._onLayout);
     window.removeEventListener('scroll', this._onLayout, { capture: true });
@@ -539,7 +486,7 @@ export class Stats {
       id: 'rec',
       label: 'REC',
       description: 'Record a session: click to start, click again to stop and get a report.',
-      modes: ['performance'],
+      modes: ['graph'],
       onChange: (active) => {
         if (active) this.startRecording();
         else this.stopRecording();
@@ -588,10 +535,9 @@ export class Stats {
 
   /**
    * The canvas moved or changed size without a resize or scroll event (a layout shift above it).
-   * Checked at each refresh; not in INFO, where the canvas is transformed into its thumbnail.
+   * Checked at each refresh.
    */
   private moved(): boolean {
-    if (this._overlay.mode === 'info') return false;
     const rect = this._renderer.domElement.getBoundingClientRect();
     const last = this._rect;
     return rect.left !== last.left || rect.top !== last.top || rect.width !== last.width || rect.height !== last.height;
@@ -599,7 +545,6 @@ export class Stats {
 
   /** Lays the overlay exactly over the canvas. */
   private syncRect(): void {
-    this._fit.clear();
     const rect = this._renderer.domElement.getBoundingClientRect();
     this._rect = rect;
     const style = this._overlay.root.style;
@@ -673,9 +618,9 @@ function builtinMetrics(sampler: FrameSampler, budgets: Budgets, profile: Device
   ];
 }
 
-/** Frame pacing rows, Performance only: stutter that the FPS average hides. */
+/** Frame pacing rows, beside the graphs: stutter that the FPS average hides. */
 function pacingMetrics(budget: number, pacing: () => FramePacing | null): StatsMetric[] {
-  const modes = ['performance'];
+  const modes = ['graph'];
   return [
     {
       id: 'p95', label: '95th percentile frame time over the last 240 frames, in ms. Yellow past 1.25× the budget.',
@@ -713,24 +658,6 @@ function pacingMetrics(budget: number, pacing: () => FramePacing | null): StatsM
   ];
 }
 
-/** Image mode: the rendered colour under the pointer, as hex. */
-function pixelMetric(read: () => number | null): StatsMetric {
-  const channel = (value: number | null, shift: number): string => (value === null ? '—' : String((value >> shift) & 255));
-  return {
-    id: 'pixel', label: 'Colour of the rendered pixel under the pointer.', place: 'top', plate: 'PIX', width: 7, modes: ['image'],
-    read, format: (value) => `#${value.toString(16).padStart(6, '0').toUpperCase()}`,
-    tip: {
-      title: 'Pixel under the pointer',
-      text: 'The displayed colour, after tone mapping and encoding, from the 256×144 copy of the canvas the scopes share.',
-      values: () => {
-        const value = read();
-        const luma = value === null ? '—' : String(Math.round(0.2126 * ((value >> 16) & 255) + 0.7152 * ((value >> 8) & 255) + 0.0722 * (value & 255)));
-        return [['R', channel(value, 16)], ['G', channel(value, 8)], ['B', channel(value, 0)], ['Luma', luma]];
-      }
-    }
-  };
-}
-
 /** A row for one stats.mark() segment. */
 function segmentMetric(name: string, read: () => number | null): StatsMetric {
   const first = name === FIRST_SEGMENT;
@@ -739,6 +666,6 @@ function segmentMetric(name: string, read: () => number | null): StatsMetric {
     label: first
       ? 'CPU time from stats.begin() to the first stats.mark(), in ms per frame.'
       : `CPU time of the "${name}" segment, from stats.mark('${name}') to the next mark or stats.end(), in ms per frame.`,
-    place: 'top', plate: name.slice(0, 4).toUpperCase(), unit: 'MS', format: formatMs, width: 4, modes: ['performance'], read
+    place: 'top', plate: name.slice(0, 4).toUpperCase(), unit: 'MS', format: formatMs, width: 4, modes: ['graph'], read
   };
 }

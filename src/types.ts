@@ -34,7 +34,7 @@ export interface TipContent {
 }
 
 /** Built-in display modes. Custom modes add their own string ids. */
-export type BuiltinMode = 'simple' | 'performance' | 'mesh' | 'memory' | 'image' | 'info' | 'off';
+export type BuiltinMode = 'simple' | 'performance' | 'graph' | 'off';
 // `string & {}` keeps editor completion for the built-in names while accepting custom ids.
 
 export type StatsMode = BuiltinMode | (string & {});
@@ -179,8 +179,8 @@ export interface HistogramDefinition {
 
 /** What a mode adds on top of the always-visible readouts. */
 export interface ModeContent {
-  /** The large top-left histogram of this mode; 'image' is the built-in histogram of the rendered image. */
-  histogram?: HistogramDefinition | 'image';
+  /** The large top-left histogram of this mode. */
+  histogram?: HistogramDefinition;
   /** Toggle plates shown next to the mode plate while this mode is on. */
   controls?: readonly ControlDefinition[];
   /** Graphs, at most 4 per mode including the built-in ones. */

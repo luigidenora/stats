@@ -1,10 +1,6 @@
 import { checkControl, Toggle } from './controls.js';
 import { checkDistribution, checkGraph, checkHistogram, checkMetric, safeFormat, customGraphPanel, distributionPanel, finite, graphPanel, safeRead, warnOnce, type Panel } from './custom.js';
-import { HISTOGRAM_WIDTH, histogramPanel, imageHistogramPanel, type HistogramPanel } from './histogram-panel.js';
-import { vectorscopePanel, waveformPanel, zebraMask } from './scopes.js';
-import { IMAGE_HEIGHT, IMAGE_WIDTH, ImageSampler } from './image.js';
-import type { InfoPage } from './info.js';
-import { InfoPanel } from './info-panel.js';
+import { HISTOGRAM_WIDTH, histogramPanel, type HistogramPanel } from './histogram-panel.js';
 import { el, graphColors, hit, num, stack, TimeReadout, write, type Writable } from './dom.js';
 import { play, reducedMotion, snapshot, type Snapshot } from './flip.js';
 import { formatCount, formatInt, formatMs, isAlert, type Threshold } from './format.js';
@@ -43,8 +39,6 @@ export interface OverlayOptions {
   mode?: StatsMode;
   /** Called when the mode plate changes the mode. */
   onModeChange?: (mode: StatsMode) => void;
-  /** Called after every layout, e.g. to fit the canvas into the INFO thumbnail. */
-  onLayout?: () => void;
 }
 
 interface Slot extends Writable {
@@ -57,11 +51,21 @@ interface Slot extends Writable {
 interface Content {
   graphs: Panel[];
   distribution: Panel | null;
-  /** The large top-left histogram; 'image' uses the shared image histogram. */
-  histogram: HistogramPanel | 'image' | null;
+  /** The large top-left histogram of a custom mode. */
+  histogram: HistogramPanel | null;
 }
 
-type PanelName = 'frame' | 'cpu' | 'gpu' | 'time' | 'calls' | 'triangles' | 'heap' | 'geometries' | 'textures';
+type PanelName = 'frame' | 'cpu' | 'gpu' | 'time';
+
+/**
+ * What each built-in mode adds; modes are cumulative. Simple: FPS and CPU / GPU time. Performance:
+ * plus the heap and the counters. Graph: plus the time graphs and the pacing rows. Custom modes
+ * keep the Performance readouts and add their own content.
+ */
+function shows(mode: StatsMode): { heap: boolean; counters: boolean; graphs: boolean } {
+  if (mode === 'simple') return { heap: false, counters: false, graphs: false };
+  return { heap: true, counters: true, graphs: mode === 'graph' };
+}
 
 const BACKEND_PLATES: Record<BackendKind, [string, string]> = {
   webgl: ['GL2', 'WebGLRenderer (WebGL 2)'],
@@ -77,7 +81,6 @@ const HEIGHT = 32;
 const NARROW_HEIGHT = 40;
 
 const ms = (value: number | null): string => (value === null ? '—' : formatMs(value));
-const count = (value: number | null): string => (value === null ? '—' : formatCount(value));
 const mb = (value: number | null): string => (value === null ? '—' : formatInt(value));
 
 export class Overlay {
@@ -88,7 +91,6 @@ export class Overlay {
   private readonly _plates = el('div', 'tez-c tez-c-backend');
   private readonly _toggles: Toggle[] = [];
   private readonly _rows = el('div', 'tez-c tez-c-rows tez-rows');
-  /** TIP plate, first of the top-right rows: shown only while diagnostics have findings. */
   private readonly _counters = el('div', 'tez-c tez-c-counters');
   private readonly _grid = el('div', 'tez-grid');
   /** FPS, CPU, GPU and heap on one row, top-left. */
@@ -98,31 +100,6 @@ export class Overlay {
   private readonly _side = el('div', 'tez-c tez-c-side');
   /** Top-left, under the readouts: the large histogram of the current mode. */
   private readonly _hist = el('div', 'tez-c tez-c-hist');
-  private readonly _imageSampler = new ImageSampler();
-  private _imageSource: HTMLCanvasElement | null = null;
-  private _imagePanel: HistogramPanel | null = null;
-  /** Image mode aids drawn over the canvas: zebra stripes on clipped highlights, framing guides. */
-  private readonly _zebra = el('canvas', 'tez-zebra');
-  private readonly _guides = el('div', 'tez-guides');
-  private _zebraOn = false;
-  private _guidesOn = false;
-  private _zebraPhase = 0;
-  private _zebraImage: ImageData | null = null;
-  /** Last pointer position in client px, for the pixel readout; null when it left the page. */
-  private _pointer: { x: number; y: number } | null = null;
-  private readonly onPointerMove = (event: PointerEvent): void => {
-    this._pointer = { x: event.clientX, y: event.clientY };
-  };
-
-  private readonly onPointerLeave = (): void => {
-    this._pointer = null;
-  };
-
-  /** INFO mode: the shrunk canvas shows through this cell; the page sits on the right. */
-  private readonly _thumb = el('div', 'tez-c tez-c-thumb');
-  private readonly _pages = el('div', 'tez-c tez-c-pages');
-  private _info: InfoPanel | null = null;
-  private readonly _onLayout: (() => void) | undefined;
   private _distributionOnSide = false;
   private readonly _slots: Slot[] = [];
   private readonly _fps: Writable;
@@ -131,9 +108,7 @@ export class Overlay {
   private readonly _gpu: TimeReadout;
   private readonly _samples = {
     frame: new Samples(), cpu: new Samples(), gpu: new Samples(),
-    calls: new Samples(), triangles: new Samples(), geometries: new Samples(), textures: new Samples(),
-    heap: new Samples(),
-    /** 1 for a column whose frames created a shader program, 0 otherwise; aligned with `frame`. */
+    /** 1 for a column whose frames created a shader program, 2 for an event, 3 both; aligned with `frame`. */
     compiles: new Samples()
   };
 
@@ -152,8 +127,6 @@ export class Overlay {
   /** Current arrangement; a change triggers the FLIP transition. */
   private _arrangement = '';
   /** Values of the last refresh, read by the live rows of the readout tooltips. */
-  /** Reads of the renderer counters behind the Mesh and Memory graphs. */
-  private _counterReads: Record<'calls' | 'triangles' | 'geometries' | 'textures', () => number> | null = null;
   /** Ids of the custom graphs added so far, to refuse duplicates. */
   private readonly _graphIds = new Set<string>();
   private _last: { frame: FrameValues; thresholds: FrameThresholds } = { frame: { fps: null, cpu: null, gpu: null }, thresholds: {} };
@@ -186,11 +159,6 @@ export class Overlay {
       width: MERGED, height: HEIGHT, vertical: false, autoScale: false, normalize: true, events: s.compiles, lane: s.frame, label: ''
     });
     this._panels = this.buildPanels();
-    // Built-in Image mode: the shared histogram of the rendered image.
-    const capture = (): boolean => this._imageSource !== null && this._imageSampler.capture(this._imageSource);
-    this._content.set('image', { graphs: [waveformPanel(this._imageSampler, capture), vectorscopePanel(this._imageSampler, capture)], distribution: null, histogram: 'image' });
-    this._content.set('info', { graphs: [], distribution: null, histogram: 'image' });
-    this._onLayout = options.onLayout;
     this._control = interactive
       ? new ModeControl(this._mode, () => this._modes, (mode) => {
           this.setMode(mode);
@@ -201,48 +169,9 @@ export class Overlay {
     this._plates.append(this._backend);
     if (this._control !== null) this._plates.append(this._control.element);
     this._counters.append(this._grid);
-    // The thumbnail comes first: its backdrop shadow must paint under every other cell.
-    this._zebra.width = IMAGE_WIDTH;
-    this._zebra.height = IMAGE_HEIGHT;
-    this._zebra.setAttribute('aria-hidden', 'true');
-    this._guides.setAttribute('aria-hidden', 'true');
-    for (let i = 0; i < 5; i++) this._guides.append(el('span', `tez-guide tez-guide-${i}`));
-    window.addEventListener('pointermove', this.onPointerMove, { passive: true });
-    document.documentElement.addEventListener('pointerleave', this.onPointerLeave);
-    // Under every cell: the aids belong to the picture, the readouts stay on top.
-    this.root.append(this._zebra, this._guides, this._thumb, this._pages, this._band, this._rows, this._hist, this._side, this._counters, this._strip, this._plates);
+    this.root.append(this._band, this._rows, this._hist, this._side, this._counters, this._strip, this._plates);
     this._tooltip = new Tooltip(this.root);
     this.applyMode();
-  }
-
-  /** Image mode: stripes over clipped highlights (see scopes.ts). */
-  public setZebra(on: boolean): void {
-    this._zebraOn = on;
-    this.applyMode();
-    this.drawZebra();
-  }
-
-  /** Image mode: rule-of-thirds lines and a centre mark over the canvas. */
-  public setGuides(on: boolean): void {
-    this._guidesOn = on;
-    this.applyMode();
-  }
-
-  /**
-   * Colour of the rendered pixel under the pointer as 0xRRGGBB, from the image copy of the last
-   * refresh; null outside Image mode, off the canvas or before the first copy.
-   */
-  public pixelAt(): number | null {
-    const pixels = this._imageSampler.pixels;
-    const pointer = this._pointer;
-    if (this._mode !== 'image' || pixels === null || pointer === null || !this._imageSampler.valid) return null;
-    const box = this.root.getBoundingClientRect();
-    if (box.width === 0 || box.height === 0) return null;
-    const u = (pointer.x - box.left) / box.width;
-    const v = (pointer.y - box.top) / box.height;
-    if (u < 0 || u >= 1 || v < 0 || v >= 1) return null;
-    const at = (Math.floor(v * IMAGE_HEIGHT) * IMAGE_WIDTH + Math.floor(u * IMAGE_WIDTH)) * 4;
-    return (pixels[at] << 16) | (pixels[at + 1] << 8) | pixels[at + 2];
   }
 
   public get mode(): StatsMode { return this._mode; }
@@ -298,7 +227,7 @@ export class Overlay {
     }
 
     // Check what could throw half-way before the mode joins the cycle.
-    const histogramProblem = definition.histogram === undefined || definition.histogram === 'image' ? null : checkHistogram(definition.histogram);
+    const histogramProblem = definition.histogram === undefined ? null : checkHistogram(definition.histogram);
     if (histogramProblem !== null) {
       warnOnce(`mode "${id}" was skipped: ${histogramProblem}`);
       return false;
@@ -349,8 +278,7 @@ export class Overlay {
       else target.distribution = distributionPanel(content.distribution);
     }
 
-    if (content.histogram === 'image') target.histogram = 'image';
-    else if (content.histogram !== undefined) {
+    if (content.histogram !== undefined) {
       const problem = checkHistogram(content.histogram);
       if (problem !== null) warnOnce(problem);
       else target.histogram = histogramPanel(content.histogram, warnOnce) ?? target.histogram;
@@ -394,11 +322,6 @@ export class Overlay {
     }
   }
 
-  /** Feeds the Mesh and Memory graphs from the renderer, independently of the counter rows on screen. */
-  public setCounters(counters: Record<'calls' | 'triangles' | 'geometries' | 'textures', () => number>): void {
-    this._counterReads = counters;
-  }
-
   public removeMetric(id: string): void {
     for (let i = 0, l = this._slots.length; i < l; i++) {
       if (this._slots[i].metric.id !== id) continue;
@@ -418,7 +341,6 @@ export class Overlay {
   /** Refreshes every text value. Called a few times per second. */
   public refresh(frame: FrameValues, budget: number, thresholds: FrameThresholds): void {
     const heap = frame.heap ?? null;
-    if (heap !== null) this._samples.heap.push(heap);
     this._last = { frame, thresholds };
     if (this._mode === 'off') return;
     this._tooltip.refresh();
@@ -446,10 +368,6 @@ export class Overlay {
 
       shown.describe();
     }
-
-    if (this._mode === 'memory') this._panels.heap.draw(colors);
-    this.drawZebra();
-    if (this._mode === 'info') this._info?.update();
   }
 
   /**
@@ -474,10 +392,6 @@ export class Overlay {
     // GPU results arrive late and irregularly: repeat the last one when a group has none.
     if (p.gpu >= 0) p.lastGpu = p.gpu;
     if (p.lastGpu >= 0) s.gpu.push(p.lastGpu);
-    this.pushCounter(s.calls, 'calls');
-    this.pushCounter(s.triangles, 'triangles');
-    this.pushCounter(s.geometries, 'geometries');
-    this.pushCounter(s.textures, 'textures');
     p.frames = 0;
     p.interval = -1;
     p.cpu = -1;
@@ -513,7 +427,7 @@ export class Overlay {
    * Arranges the overlay for its size and mode, animating any change of arrangement:
    * - inline: counters and readouts bottom-left, the mode's graphs beside them;
    * - stacked: the graphs on their own row below the readouts;
-   * - in Performance mode, when even the stacked row is too narrow, the frame, CPU and GPU graphs
+   * - in Graph mode, when even the stacked row is too narrow, the frame, CPU and GPU graphs
    *   merge into one graph whose red, green and blue channels add up like light.
    * Call after the overlay is resized.
    */
@@ -525,65 +439,24 @@ export class Overlay {
     this._arrangement = this.arrange(width);
     if (before !== null && this._arrangement !== previous) play(before, this.root);
     this.drawGraphs(true);
-    this._onLayout?.();
-  }
-
-  /**
-   * Enables the INFO mode's pages: `build(index)` returns page `index` of `count`. The PAGE plate
-   * joins the plates, visible only in INFO.
-   */
-  public setInfoSource(pages: number, build: (index: number) => InfoPage): void {
-    this._info?.dispose();
-    this._info = new InfoPanel(pages, build);
-    this._pages.replaceChildren(this._info.element);
-    this._plates.insertBefore(this._info.pager, this._control?.element ?? null);
-    this.applyMode();
-  }
-
-  /** In INFO mode, the box the canvas should shrink into (overlay coordinates); otherwise null. */
-  public thumbRect(): DOMRect | null {
-    return this._mode === 'info' && this._thumb.offsetWidth > 0 ? this._thumb.getBoundingClientRect() : null;
   }
 
   public dispose(): void {
-    this._info?.dispose();
     this._control?.dispose();
     for (let i = 0, l = this._toggles.length; i < l; i++) this._toggles[i].dispose();
     this._tooltip.dispose();
-    window.removeEventListener('pointermove', this.onPointerMove);
-    document.documentElement.removeEventListener('pointerleave', this.onPointerLeave);
     this.root.remove();
-  }
-
-  private pushCounter(samples: Samples, id: 'calls' | 'triangles' | 'geometries' | 'textures'): void {
-    const read = this._counterReads?.[id];
-    if (read !== undefined) samples.push(read());
-  }
-
-  /** Repaints the zebra stripes from the last image copy; they crawl one step per refresh. */
-  private drawZebra(): void {
-    if (this._zebra.hidden === true) return;
-    const pixels = this._imageSampler.pixels;
-    const ctx = this._zebra.getContext('2d');
-    if (ctx === null || pixels === null || !this._imageSampler.valid) return;
-    this._zebraImage ??= ctx.createImageData(IMAGE_WIDTH, IMAGE_HEIGHT);
-    zebraMask(pixels, this._zebraImage.data, this._zebraPhase++);
-    ctx.putImageData(this._zebraImage, 0, 0);
   }
 
   private applyMode(): void {
     this.root.classList.toggle('tez-off', this._mode === 'off');
-    this._zebra.hidden = !(this._zebraOn && this._mode === 'image');
-    this._guides.hidden = !(this._guidesOn && this._mode === 'image');
-    this.root.classList.toggle('tez-info', this._mode === 'info');
     this.root.dataset['mode'] = this._mode;
-    if (this._info !== null) {
-      this._info.pager.hidden = this._mode !== 'info';
-      if (this._mode === 'info') this._info.update(true);
-    }
+    const show = shows(this._mode);
+    this._heap.element.hidden = !show.heap;
+    this._counters.hidden = !show.counters;
     // A page histogram next to a distribution: the bar's levels take the histogram's channel colours.
     const content = this._content.get(this._mode);
-    const rgb = content !== undefined && content.distribution !== null && content.histogram !== null && content.histogram !== 'image';
+    const rgb = content !== undefined && content.distribution !== null && content.histogram !== null;
     if (rgb) this.root.dataset['rgb'] = '';
     else this.root.removeAttribute('data-rgb');
     // Metrics scoped to some modes show only there.
@@ -603,7 +476,7 @@ export class Overlay {
    * panels of every mode (built-in and custom), so a component added later animates like the rest.
    */
   private animated(): HTMLElement[] {
-    const elements: HTMLElement[] = [this._band, this._counters, this._backend];
+    const elements: HTMLElement[] = [this._band, this._heap.element, this._counters, this._backend];
     for (let i = 0, l = this._toggles.length; i < l; i++) elements.push(this._toggles[i].element);
     for (let i = 0, l = this._slots.length; i < l; i++) {
       if (this._slots[i].metric.place === 'top') elements.push(this._slots[i].element);
@@ -616,10 +489,8 @@ export class Overlay {
       const content = contents[c];
       for (let i = 0, l = content.graphs.length; i < l; i++) elements.push(content.graphs[i].element);
       if (content.distribution !== null) elements.push(content.distribution.element);
-      if (content.histogram !== null && content.histogram !== 'image') elements.push(content.histogram.element);
+      if (content.histogram !== null) elements.push(content.histogram.element);
     }
-
-    if (this._imagePanel !== null) elements.push(this._imagePanel.element);
 
     return elements;
   }
@@ -635,8 +506,7 @@ export class Overlay {
   }
 
   private builtinCount(id: StatsMode): number {
-    if (id === 'performance' || id === 'memory') return 3;
-    return id === 'mesh' ? 2 : 0;
+    return shows(id).graphs ? 3 : 0;
   }
 
   /** The panels the current mode shows, in order: built-in graphs, custom graphs, distribution. */
@@ -644,9 +514,7 @@ export class Overlay {
     const p = this._panels;
     let panels: Panel[] = [];
     if (this._mode === 'off') return panels;
-    if (this._mode === 'performance') panels = this._merged ? [p.time] : [p.frame, p.cpu, p.gpu];
-    else if (this._mode === 'mesh') panels = [p.calls, p.triangles];
-    else if (this._mode === 'memory') panels = [p.heap, p.geometries, p.textures];
+    if (shows(this._mode).graphs) panels = this._merged ? [p.time] : [p.frame, p.cpu, p.gpu];
     const content = this._content.get(this._mode);
     if (content === undefined) return panels;
     panels = panels.concat(content.graphs);
@@ -656,25 +524,23 @@ export class Overlay {
     return panels;
   }
 
-  /** Draws the visible graphs; the heap graph only when asked (it scrolls per refresh, not per frame). */
   /**
    * Redraws the visible panels. Per graph column (`all` false) only the scrolling ones: refresh-timed
-   * panels (histograms, distributions, the heap) change 4×/s and redraw in refresh().
+   * panels (histograms, distributions) change 4×/s and redraw in refresh().
    */
   private drawGraphs(all: boolean): void {
     if (this._mode === 'off') return;
     const colors = graphColors(this.root);
     const visible = this.visiblePanels();
     for (let i = 0, l = visible.length; i < l; i++) {
-      if (all || (visible[i] !== this._panels.heap && visible[i].timing !== 'refresh')) visible[i].draw(colors);
+      if (all || visible[i].timing !== 'refresh') visible[i].draw(colors);
     }
   }
 
-  /** Tries inline, then stacked; Performance merges its graphs only when stacked does not fit. */
+  /** Tries inline, then stacked; Graph merges its graphs only when stacked does not fit. */
   private arrange(width: number): string {
     if (this._mode === 'off') return 'off';
     this._merged = false;
-    this.placeThumb(width);
     this.resetLengths();
     this.placeDistribution(width);
     this.placeHistogram(width);
@@ -691,7 +557,7 @@ export class Overlay {
     // Stacked: the strip has its own row at the top, under the readouts, edge to edge.
     const room = width - space.edges;
     if (this._strip.offsetWidth <= room) return `${this._mode}-stacked`;
-    if (this._mode === 'performance') {
+    if (shows(this._mode).graphs) {
       // Merge only now: the three time graphs become one RGB graph, as wide as the row and taller
       // on narrow overlays, so every column and the lane under it read well on a phone.
       this._merged = true;
@@ -751,43 +617,9 @@ export class Overlay {
     this._strip.replaceChildren(...elements);
   }
 
-  /**
-   * Gives the canvas the image histogram reads; `stats.end()` passes the renderer's canvas.
-   * The capture runs inside `refresh()`, i.e. in the same task as the render.
-   */
-  public setImageSource(canvas: HTMLCanvasElement): void {
-    this._imageSource = canvas;
-  }
-
-  /** The current mode's large histogram, if any (the shared image one is created on first use). */
+  /** The current mode's large histogram, if any. */
   private histogram(): HistogramPanel | null {
-    const histogram = this._content.get(this._mode)?.histogram ?? null;
-    if (histogram !== 'image') return histogram;
-    this._imagePanel ??= imageHistogramPanel(this._imageSampler, () => this._imageSource !== null && this._imageSampler.capture(this._imageSource));
-    return this._imagePanel;
-  }
-
-  /**
-   * INFO mode: sizes the thumbnail cell to the canvas aspect, 46% of the overlay width on large
-   * screens (at most 720px), edge to edge on narrow ones. Elsewhere the cell collapses.
-   */
-  private placeThumb(width: number): void {
-    const source = this._imageSource;
-    if (this._mode !== 'info' || source === null || source.height === 0) {
-      this._thumb.style.width = '';
-      this._thumb.style.height = '';
-      return;
-    }
-
-    const edges = this.spacing().edges;
-    const narrow = width < 720;
-    const aspect = source.width / source.height;
-    // At most 40% of the height, so a portrait canvas never fills a phone screen.
-    const maxWidth = this.root.clientHeight * 0.4 * aspect;
-    const w = Math.round(Math.min(maxWidth, narrow ? width - edges : Math.min(720, Math.max(240, width * 0.46))));
-    this._thumb.style.width = `${w}px`;
-    this._thumb.style.height = `${Math.round(w / aspect)}px`;
-    this.root.classList.toggle('tez-info-narrow', narrow);
+    return this._content.get(this._mode)?.histogram ?? null;
   }
 
   /** Puts the mode's histogram in its top-left cell, as wide as the overlay allows (at most 256px). */
@@ -801,8 +633,6 @@ export class Overlay {
     histogram.setWidth(HISTOGRAM_WIDTH);
     this._hist.replaceChildren(histogram.element);
     const extra = histogram.element.offsetWidth - HISTOGRAM_WIDTH;
-    // INFO: the histogram spans the thumbnail above it.
-    if (this._mode === 'info' && this._thumb.offsetWidth > 0) histogram.setWidth(this._thumb.offsetWidth - extra);
     const room = width - this.spacing().edges;
     if (histogram.element.offsetWidth > room) histogram.setWidth(room - extra);
   }
@@ -845,17 +675,7 @@ export class Overlay {
         'GPU time per frame, newest on the right. CPU and GPU share one scale.', seriesTip('gpu', b, s.gpu)),
       time: panel(this._timeGraph, merged, 'MS', ms, s.frame, 'Frame (blue), GPU (green) and CPU (red) time in one graph, each scaled between its own recent min and max '
       + 'so the three always mix: overlaps add up to cyan, yellow, magenta and white. It shows when each one moves, not how big it is; '
-      + 'the readouts above give the values. A tick above a column marks a frame that created a new shader program.', mergedTip(b, s)),
-      calls: panel(graph([{ samples: s.calls, color: 'ink' }], Infinity, true), stack('DRAW', 'CALLS'), 'calls', count, s.calls,
-        'Draw calls per frame over time.'),
-      triangles: panel(graph([{ samples: s.triangles, color: 'ink' }], Infinity, true), stack('TRI', 'COUNT'), 'tris', count, s.triangles,
-        'Triangles per frame over time.'),
-      heap: panel(graph([{ samples: s.heap, color: 'ink' }], Infinity, true), stack('MB', 'HEAP'), 'MB', mb, s.heap,
-        'Used JS heap over time, one column per refresh. A line that keeps climbing points to a leak.'),
-      geometries: panel(graph([{ samples: s.geometries, color: 'ink' }], Infinity, true), stack('GEO', 'MEM'), 'geo', count, s.geometries,
-        'Geometries in GPU memory over time. Steady growth means geometries are created and never disposed.'),
-      textures: panel(graph([{ samples: s.textures, color: 'ink' }], Infinity, true), stack('TEX', 'MEM'), 'tex', count, s.textures,
-        'Textures in GPU memory over time. Steady growth means textures are created and never disposed.')
+      + 'the readouts above give the values. A tick above a column marks a frame that created a new shader program.', mergedTip(b, s))
     };
   }
 
@@ -904,7 +724,7 @@ const orDash = (value: number | null | undefined, format: (v: number) => string)
 function fpsTip(budget: number, last: LastValues): TipContent {
   return {
     title: 'Frames per second',
-    text: 'Frames drawn per second, averaged over the last refresh (4 times a second). Averages hide stutter: read P95 and DROP in Performance.',
+    text: 'Frames drawn per second, averaged over the last refresh (4 times a second). Averages hide stutter: read P95 and DROP in Graph mode.',
     legend: [{ mark: 'ink', text: 'At or near the target rate' }, { mark: 'alert', text: 'Below the alert bound (default 90% of the target)' }],
     values: () => {
       const { frame, thresholds } = last();

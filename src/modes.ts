@@ -3,8 +3,8 @@
  *
  * Like a camera's display button, a click steps to the next mode. The plate shows a display icon
  * and the current mode's code; the caret beside it (or a right click) opens a menu to pick one
- * directly. Every mode keeps the core readouts on screen; work-specific modes
- * add their own graphs. Custom modes join the cycle after the built-in ones, before 'off'.
+ * directly. Built-in modes are cumulative: each one adds to the previous. Custom modes join the
+ * cycle after the built-in ones, before 'off'.
  */
 
 import { createCaret, createModeIcon } from './glyphs.js';
@@ -23,12 +23,9 @@ export interface ModeInfo {
 }
 
 export const MODES: readonly ModeInfo[] = [
-  { id: 'simple', name: 'Simple', code: 'STD', description: 'Readouts only: counters, FPS, CPU and GPU time, heap.' },
-  { id: 'performance', name: 'Performance', code: 'PERF', description: 'Readouts plus frame, CPU and GPU time graphs.' },
-  { id: 'mesh', name: 'Mesh & instances', code: 'MESH', description: 'Readouts plus draw call and triangle graphs.' },
-  { id: 'memory', name: 'Memory', code: 'MEM', description: 'Readouts plus heap, geometry and texture graphs.' },
-  { id: 'image', name: 'Image', code: 'IMG', description: 'Readouts plus the R, G, B histogram of the rendered image: exposure, clipping, colour casts.' },
-  { id: 'info', name: 'Info', code: 'INFO', description: 'The canvas shrinks to a thumbnail; technical pages and the image histogram take the rest.' },
+  { id: 'simple', name: 'Simple', code: 'STD', description: 'Frame rate, CPU and GPU time.' },
+  { id: 'performance', name: 'Performance', code: 'PERF', description: 'Simple plus the JS heap and the renderer counters.' },
+  { id: 'graph', name: 'Graph', code: 'GRPH', description: 'Performance plus the frame, CPU and GPU time graphs and the frame pacing rows.' },
   { id: 'off', name: 'Off', code: 'OFF', description: 'Nothing on screen but this control.' }
 ];
 

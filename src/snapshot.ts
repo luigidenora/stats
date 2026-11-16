@@ -38,7 +38,6 @@ export interface StatsSnapshot {
   pressure: Pressure;
   /** Scene survey (needs `scene`); byte sizes are estimates. */
   scene: SceneSummary | null;
-  camera: { type: string; fov: number | null; near: number; far: number; position: [number, number, number] } | null;
   recording: boolean;
   /** The last finished recording. */
   report: StatsReport | null;

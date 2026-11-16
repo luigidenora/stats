@@ -19,7 +19,6 @@ type PublicKeys = Record<keyof RealStats, unknown>;
 class NoopStats implements PublicKeys {
   public mode: StatsMode = 'off';
   public scene = null;
-  public camera = null;
   private _element: HTMLElement | null = null;
 
   public get modes(): readonly { id: StatsMode; name: string; code: string; description: string }[] { return []; }
@@ -55,7 +54,7 @@ class NoopStats implements PublicKeys {
       frame: { fps: null, cpu: null, gpu: null, heap: null }, pacing: null,
       counters: { calls: 0, triangles: 0, points: 0, lines: 0, geometries: 0, textures: 0, programs: null, passes: null },
       canvas: { width: 0, height: 0, cssWidth: 0, cssHeight: 0, pixelRatio: null },
-      pressure: 'ok', scene: null, camera: null, recording: false, report: null
+      pressure: 'ok', scene: null, recording: false, report: null
     };
   }
 }
