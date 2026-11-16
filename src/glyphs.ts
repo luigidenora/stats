@@ -116,6 +116,15 @@ export const GLYPHS = {
     label: 'Textures in memory',
     base: [{ d: checker() }]
   },
+  /**
+   * Objects: the scene graph, a parent node with two children. On whole pixels only: a 4×3 root,
+   * a 2px trunk, a 1px branch and two 4×3 children, symmetric about the plate centre.
+   */
+  objects: {
+    category: 'memory',
+    label: 'Objects in the scene',
+    base: [{ d: `${rect(6, 3, 10, 6)}${rect(7, 6, 9, 8)}${rect(4, 8, 12, 9)}${rect(4, 9, 6, 10)}${rect(10, 9, 12, 10)}${rect(3, 10, 7, 13)}${rect(9, 10, 13, 13)}` }]
+  },
   /** Programs: shader source. */
   programs: {
     category: 'memory',

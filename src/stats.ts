@@ -16,6 +16,8 @@ const STORAGE_KEY = 'tez-stats-mode';
 const PRESSURE_MS = 1000;
 /** A cached scene survey is reused for this long. */
 const SURVEY_FRESH_MS = 2000;
+/** The object counter walks the scene at most once a second. */
+const COUNT_MS = 1000;
 /** A survey waits at least this many times its own duration: at most 0.4% of the time, however large the scene. */
 const SURVEY_COST_FACTOR = 250;
 
@@ -43,7 +45,7 @@ export interface StatsOptions {
   thresholds?: FrameThresholds;
   /**
    * Turn off built-ins by id: the counters 'calls', 'triangles', 'points', 'lines', 'geometries',
-   * 'textures', 'programs', the Graph rows 'p95', 'worst', 'dropped', and the 'rec' plate.
+   * 'textures', 'programs', 'objects', the Graph rows 'p95', 'worst', 'dropped', and the 'rec' plate.
    */
   exclude?: readonly string[];
   /** Extra metrics, added after the built-in ones. */
@@ -120,6 +122,11 @@ export class Stats {
   private _holdRefresh = false;
   /** Duration of the last scene survey, in ms. */
   private _surveyCost = 0;
+  /** Objects in the scene at the last count, when it was taken and how long it took. */
+  private _objects: number | null = null;
+  private _countedAt = -Infinity;
+  private _countCost = 0;
+  private readonly _excluded: readonly string[];
   private readonly _pressure = new PressureMonitor();
   private readonly _onPressure: ((pressure: Pressure) => void) | null;
   private readonly _onReport: ((report: StatsReport) => void) | null;
@@ -185,11 +192,13 @@ export class Stats {
     };
 
     const exclude = options.exclude ?? [];
+    this._excluded = exclude;
     const builtins = builtinMetrics(this._sampler, this._budgets, this._profile).concat(pacingMetrics(this._budget, () => this._pacingSummary));
     for (let i = 0, l = builtins.length; i < l; i++) {
       if (!exclude.includes(builtins[i].id)) this._overlay.addMetric(builtins[i]);
     }
 
+    if (this._scene !== null) this.showObjects();
     const extra = options.metrics ?? [];
     for (let i = 0, l = extra.length; i < l; i++) this._overlay.addMetric(extra[i]);
     if (!exclude.includes('rec')) this._overlay.addControl(this.recControl());
@@ -442,6 +451,10 @@ export class Stats {
     this._scene = scene;
     this._survey = null;
     this._surveyedAt = -Infinity;
+    this._objects = null;
+    this._countedAt = -Infinity;
+    if (scene === null) this._overlay.removeMetric('objects');
+    else this.showObjects();
   }
 
   /** Removes the overlay and restores the renderer's info settings. */
@@ -457,6 +470,39 @@ export class Stats {
       const index = live.indexOf(this);
       if (index >= 0) live.splice(index, 1);
     }
+  }
+
+  /** The OBJ counter, bottom-left, while there is a scene. */
+  private showObjects(): void {
+    if (this._excluded.includes('objects')) return;
+    this._overlay.addMetric({
+      id: 'objects', label: 'Objects in the scene: every node of the scene graph, meshes, lights, groups and helpers included.', glyph: 'objects',
+      read: () => this.objectCount(performance.now())
+    });
+  }
+
+  /**
+   * Objects in the scene, recounted at most once a second and never more often than 250 times its
+   * own cost, so a huge scene is never walked every refresh. Null while the scene cannot be walked.
+   */
+  private objectCount(now: number): number | null {
+    const scene = this._scene;
+    if (scene === null) return null;
+    if (now - this._countedAt < Math.max(COUNT_MS, this._countCost * SURVEY_COST_FACTOR)) return this._objects;
+    this._countedAt = now;
+    const started = performance.now();
+    let count = 0;
+    try {
+      scene.traverse(() => {
+        count++;
+      });
+      this._objects = count;
+    } catch {
+      this._objects = null;
+    }
+
+    this._countCost = performance.now() - started;
+    return this._objects;
   }
 
   private memory(): MemoryCounters {

@@ -7,7 +7,8 @@ const SOURCES: Record<GlyphName, string> = {
   lines: 'info.render.lines',
   geometries: 'info.memory.geometries',
   textures: 'info.memory.textures',
-  programs: 'info.programs.length'
+  programs: 'info.programs.length',
+  objects: 'scene.traverse()'
 };
 
 const BUDGET_MS = 1000 / 60;

@@ -38,7 +38,7 @@ describe('production no-op', () => {
       const descriptor = must(Object.getOwnPropertyDescriptor(Stats.prototype, name));
       // Private methods compile to plain ones: the public ones are checked by the type in noop.ts.
       if (typeof descriptor.value !== 'function' || name === 'constructor') continue;
-      if (['syncRect', 'moved', 'survey', 'memory', 'guard', 'signalPressure', 'recControl'].includes(name)) continue;
+      if (['syncRect', 'moved', 'survey', 'memory', 'guard', 'signalPressure', 'recControl', 'showObjects', 'objectCount'].includes(name)) continue;
       expect(typeof (stats as unknown as Record<string, unknown>)[name], name).toBe('function');
     }
 

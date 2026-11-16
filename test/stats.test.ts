@@ -174,8 +174,32 @@ describe('Stats budgets and diagnostics', () => {
       run(stats, 1);
     }
 
-    // 100 ms per walk: the next waits 25 s.
-    expect(surveys).toBe(1);
+    // 100 ms per walk: one object count and one survey, then each waits 25 s.
+    expect(surveys).toBe(2);
+  });
+
+  it('counts the scene objects bottom-left, only with a scene, at most once a second', () => {
+    let walks = 0;
+    let size = 25;
+    const scene: InfoScene = { traverse: (callback) => {
+      walks++;
+      for (let i = 0; i < size; i++) callback({ type: 'Object3D' });
+    } };
+    expect(setup({ mode: 'performance' }).stats.element.querySelector('[data-tip^="Objects in the scene"]')).toBeNull();
+    const { stats } = setup({ scene, mode: 'performance' });
+    run(stats, 1);
+    const counter = must(stats.element.querySelector<HTMLElement>('.tez-c-counters [data-tip^="Objects in the scene"]'));
+    expect(counter.textContent).toContain('25');
+    expect(walks).toBeLessThanOrEqual(2);
+    size = 40;
+    run(stats, 1.1);
+    expect(counter.textContent).toContain('40');
+    stats.scene = null;
+    expect(stats.element.querySelector('[data-tip^="Objects in the scene"]')).toBeNull();
+    stats.scene = scene;
+    run(stats, 0.5);
+    expect(must(stats.element.querySelector('[data-tip^="Objects in the scene"]')).textContent).toContain('40');
+    expect(setup({ scene, exclude: ['objects'] }).stats.element.querySelector('[data-tip^="Objects in the scene"]')).toBeNull();
   });
 
   it('never lets a broken scene break the frame', () => {
