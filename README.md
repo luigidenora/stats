@@ -44,6 +44,28 @@ the renderer with `trackTimestamp: true`.
   layout, formatting, colour, animation, responsive behaviour, and what happens when your code
   throws.
 
+## What it touches, and what it never does
+
+The overlay is a reader. It never changes your scene, its objects, materials, geometries,
+textures or matrices, and it never changes your renderer or canvas. A test renders a real
+three.js scene through every mode, with recordings and snapshots, and checks that the scene is
+identical afterwards.
+
+What it does touch, all of it undone by `dispose()`:
+
+| | |
+| --- | --- |
+| The page | One overlay element on `document.body` and one `<style>` (removed with the last overlay) |
+| The GPU | WebGL: one timer query per frame on your context, skipped while you run your own. WebGPU: it resolves the timestamps you enabled with `trackTimestamp`. `gpuTimer: false` turns both off |
+| Storage | The mode you pick with the plate, in localStorage. `remember: false` turns it off |
+
+Two things only happen when you ask:
+
+- `countAllPasses: true` switches `renderer.info.autoReset` off while the overlay lives, so the
+  counters sum every `render()` of a frame (post-processing, several views). By default
+  `renderer.info` behaves as three.js defines it and the counters show the frame's last `render()`.
+- `expose: true` lists the instance in `globalThis.__THREE_EZ_STATS__`, for agents driving the page.
+
 ## Modes
 
 Click the mode plate (bottom-right: a screen icon and the mode code) for the next mode; its arrow,
@@ -133,8 +155,9 @@ const snapshot = stats.snapshot();
 //   counters: { calls, triangles, … }, budgets, scene: { meshes, lights, textureBytes, … }, report }
 ```
 
-- **From the page**: every instance is listed in `globalThis.__THREE_EZ_STATS__`, so an agent
-  driving a browser (Playwright, Chrome DevTools MCP) evaluates `__THREE_EZ_STATS__[0].snapshot()`.
+- **From the page**: with `expose: true` every instance is listed in `globalThis.__THREE_EZ_STATS__`,
+  so an agent driving a browser (Playwright, Chrome DevTools MCP) evaluates
+  `__THREE_EZ_STATS__[0].snapshot()`.
 - **As tools**: `agentTools(stats)` from `@three.ez/stats/agent` returns `three_stats_snapshot`,
   `three_stats_record` and `three_stats_set_mode` with JSON schemas, for any tool-calling bridge.
 - **WebMCP**: `registerAgentTools(stats)` offers the same tools through `navigator.modelContext`
@@ -208,7 +231,9 @@ reference is in [docs/extending.md](docs/extending.md).
 | `metrics` | `[]` | Extra metrics |
 | `onPressure` | — | Called with `'high'`, `'low'` or `'ok'`, for adaptive quality |
 | `onReport` | — | Called with the report of every finished recording |
-| `expose` | `true` | List the instance in `globalThis.__THREE_EZ_STATS__` |
+| `expose` | `false` | List the instance in `globalThis.__THREE_EZ_STATS__`, for agents |
+| `countAllPasses` | `false` | Sum every `render()` of a frame; switches `renderer.info.autoReset` off until `dispose()` |
+| `gpuTimer` | `true` | Measure GPU time (timer queries on WebGL, timestamp resolves on WebGPU) |
 
 On phones with a notch, add `viewport-fit=cover` to the page's viewport meta: the overlay keeps its
 edges inside the safe area.

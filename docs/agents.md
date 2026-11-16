@@ -27,7 +27,8 @@ Chromium). `version` changes when a field is renamed or removed.
 
 ## Reaching it
 
-**From a browser automation tool.** Every instance is listed in a global array:
+**From a browser automation tool.** With `expose: true`, every instance is listed in a global
+array (the overlay adds no global otherwise):
 
 ```js
 // Playwright: await page.evaluate(() => globalThis.__THREE_EZ_STATS__[0].snapshot())

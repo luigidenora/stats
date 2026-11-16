@@ -72,9 +72,22 @@ export interface StatsOptions {
   onReport?: (report: StatsReport) => void;
   /**
    * Lists this instance in `globalThis.__THREE_EZ_STATS__`, so tools and agents driving the page
-   * can call `__THREE_EZ_STATS__[0].snapshot()`. Default true.
+   * can call `__THREE_EZ_STATS__[0].snapshot()`. Off by default: the overlay adds no global.
    */
   expose?: boolean;
+  /**
+   * Sum every render() of a frame (post-processing, several views): switches
+   * `renderer.info.autoReset` off while the overlay lives and resets it in begin(); restored on
+   * dispose. Off by default, so `renderer.info` behaves as the app expects and the counters show
+   * its last render() of the frame.
+   */
+  countAllPasses?: boolean;
+  /**
+   * Measure GPU time. On WebGL it runs a timer query on the app's context each frame (skipped
+   * while the app runs its own); on WebGPU it resolves the timestamps the app enabled with
+   * `trackTimestamp`. False when the app reads those itself. Default true.
+   */
+  gpuTimer?: boolean;
 }
 
 /** Name of the global array of live instances. */
@@ -166,7 +179,7 @@ export class Stats {
     if (stored !== null && !builtin) this._pendingMode = stored;
     // Kept even with a remembered custom mode: that one may belong to another page of this origin and never be defined.
     if (!builtin && options.mode !== undefined && findMode(MODES, options.mode) === null) this._wantedMode = options.mode;
-    this._sampler = new FrameSampler(renderer);
+    this._sampler = new FrameSampler(renderer, { countAllPasses: options.countAllPasses === true, gpuTimer: options.gpuTimer !== false });
     this._overlay = new Overlay(this._budget, {
       interactive,
       step: options.graphStep ?? 3,
@@ -210,7 +223,7 @@ export class Stats {
     window.addEventListener('scroll', this._onLayout, { passive: true, capture: true });
     document.addEventListener('visibilitychange', this._onVisibility);
     this.syncRect();
-    this._exposed = options.expose ?? true;
+    this._exposed = options.expose ?? false;
     if (this._exposed) liveInstances().push(this);
   }
 
@@ -457,7 +470,7 @@ export class Stats {
     else this.showObjects();
   }
 
-  /** Removes the overlay and restores the renderer's info settings. */
+  /** Removes the overlay, its stylesheet (with the last overlay) and its listeners; restores autoReset with `countAllPasses`. */
   public dispose(): void {
     this._resizeObserver.disconnect();
     window.removeEventListener('resize', this._onLayout);

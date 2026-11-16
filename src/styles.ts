@@ -383,10 +383,21 @@ const CSS = `
 }
 `;
 
+/** Overlays alive per document: the stylesheet leaves with the last one. */
+const users = new WeakMap<Document, number>();
+
 export function injectStyles(doc: Document): void {
+  users.set(doc, (users.get(doc) ?? 0) + 1);
   if (doc.getElementById(STYLE_ID) !== null) return;
   const style = doc.createElement('style');
   style.id = STYLE_ID;
   style.textContent = CSS;
   doc.head.appendChild(style);
+}
+
+/** Removes the stylesheet when the last overlay of the document is disposed. */
+export function releaseStyles(doc: Document): void {
+  const count = (users.get(doc) ?? 1) - 1;
+  users.set(doc, count);
+  if (count <= 0) doc.getElementById(STYLE_ID)?.remove();
 }

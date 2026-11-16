@@ -37,9 +37,21 @@ function runWindow(sampler: FrameSampler, count: number, cpu: (i: number) => num
 }
 
 describe('FrameSampler', () => {
-  it('takes over info.autoReset so every pass of a frame counts, and gives it back', () => {
+  it('never touches renderer.info by default: autoReset stays, nothing is reset', () => {
     const renderer = fakeRenderer();
     const sampler = new FrameSampler(renderer);
+    renderer.info.render.calls = 7;
+    for (let i = 0; i < 5; i++) frame(sampler, 2, 16);
+    expect(renderer.info.autoReset).toBe(true);
+    expect(renderer.info.resets).toBe(0);
+    expect(renderer.info.render.calls).toBe(7);
+    sampler.dispose();
+    expect(renderer.info.autoReset).toBe(true);
+  });
+
+  it('switches autoReset off only with countAllPasses, and gives it back', () => {
+    const renderer = fakeRenderer();
+    const sampler = new FrameSampler(renderer, { countAllPasses: true });
     expect(renderer.info.autoReset).toBe(false);
     frame(sampler, 2, 16);
     expect(renderer.info.resets).toBe(1);
@@ -206,7 +218,7 @@ describe('FrameSampler', () => {
 describe('WebGL GPU timer', () => {
   interface Query { available: boolean; result: number; deleted: boolean }
 
-  function timerRenderer(): { renderer: StatsRenderer; queries: Query[]; gl: { disjoint: boolean; lost: boolean; extensions: number; noExtension: boolean } } {
+  function timerRenderer(): { renderer: StatsRenderer; queries: Query[]; gl: { disjoint: boolean; lost: boolean; extensions: number; noExtension: boolean; foreign: Query | null } } {
     const queries: Query[] = [];
     const gl = {
       disjoint: false,
@@ -219,13 +231,22 @@ describe('WebGL GPU timer', () => {
         queries.push(query);
         return query;
       },
-      beginQuery: (): void => undefined,
-      endQuery: (): void => undefined,
+      beginQuery: (_target: number, query: Query): void => {
+        gl.active = query;
+      },
+      endQuery: (): void => {
+        gl.active = null;
+      },
       deleteQuery: (query: Query): void => {
         query.deleted = true;
       },
       getQueryParameter: (query: Query, name: number): unknown => (gl.lost ? null : name === 1 ? query.available : query.result),
       getParameter: (): boolean => gl.disjoint,
+      CURRENT_QUERY: 3,
+      /** A timer query the app itself is running, or null. */
+      foreign: null as Query | null,
+      active: null as Query | null,
+      getQuery: (): Query | null => gl.foreign ?? gl.active,
       extensions: 0,
       noExtension: false,
       getExtension: (name: string): unknown => {
@@ -330,5 +351,31 @@ describe('WebGL GPU timer', () => {
       for (let i = 0; i < 5; i++) frame(sampler, 1, 16);
     }).not.toThrow();
     expect(sampler.take().gpu).toBeNull();
+  });
+
+  it('leaves the timer query of the app alone: that frame goes unmeasured', () => {
+    const { renderer, queries, gl } = timerRenderer();
+    const sampler = new FrameSampler(renderer);
+    gl.foreign = { available: false, result: 0, deleted: false };
+    for (let i = 0; i < 3; i++) frame(sampler, 1, 16);
+    expect(queries).toHaveLength(0);
+    gl.foreign = null;
+    frame(sampler, 1, 16);
+    expect(queries).toHaveLength(1);
+  });
+
+  it('runs no timer query and resolves no timestamp with gpuTimer off', () => {
+    const { renderer, queries } = timerRenderer();
+    const sampler = new FrameSampler(renderer, { gpuTimer: false });
+    for (let i = 0; i < 3; i++) frame(sampler, 1, 16);
+    expect(queries).toHaveLength(0);
+    expect(sampler.hasGpuTimer).toBe(false);
+    const gpu = fakeRenderer({ webgpu: true });
+    gpu.backend = { isWebGPUBackend: true, trackTimestamp: true };
+    const resolve = vi.fn(async () => Promise.resolve(1));
+    gpu.resolveTimestampsAsync = resolve;
+    const webgpu = new FrameSampler(gpu, { gpuTimer: false });
+    webgpu.take();
+    expect(resolve).not.toHaveBeenCalled();
   });
 });

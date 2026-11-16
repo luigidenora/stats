@@ -12,7 +12,11 @@ those.
 Rules every feature follows:
 
 - **Real values only.** Estimates are labelled "est."; what a backend cannot measure is "—".
-- **Read-only.** The overlay never changes the scene or the render.
+- **Read-only.** The overlay never changes the scene, the renderer or the canvas, and adds no
+  global. The only change to the renderer (`renderer.info.autoReset`) is opt-in
+  (`countAllPasses`) and undone on dispose; GPU timing runs only when the app's own timer query is
+  not active, and turns off with `gpuTimer: false`. A test renders a real scene through every mode
+  and checks it is unchanged.
 - **Opinionated interface, simple API.** A feature is plain data or one call; the overlay decides
   layout, formatting, colours, animation and failure behaviour.
 - **Never break a frame.** User callbacks are guarded; a failing one is switched off with one

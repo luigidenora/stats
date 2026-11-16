@@ -8,7 +8,7 @@ import { createGlyphFromSpec, createPlate, GLYPHS, type GlyphSpec } from './glyp
 import { Samples, TimeGraph, type Series } from './graphs.js';
 import { findMode, ModeControl, MODES, type MenuToggle, type ModeInfo } from './modes.js';
 import type { BackendKind } from './sampler.js';
-import { injectStyles } from './styles.js';
+import { injectStyles, releaseStyles } from './styles.js';
 import { setTip, Tooltip } from './tooltip.js';
 import type { ControlDefinition, ModeContent, ModeDefinition, StatsMetric, StatsMode, TipContent } from './types.js';
 
@@ -448,6 +448,7 @@ export class Overlay {
     for (let i = 0, l = this._toggles.length; i < l; i++) this._toggles[i].dispose();
     this._tooltip.dispose();
     this.root.remove();
+    releaseStyles(document);
   }
 
   private applyMode(): void {

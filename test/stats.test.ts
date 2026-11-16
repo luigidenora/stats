@@ -41,14 +41,25 @@ function run(stats: Stats, seconds: number, draw?: () => void): void {
 }
 
 describe('Stats lifecycle', () => {
-  it('mounts one overlay over the canvas and removes it, restoring the renderer, on dispose', () => {
+  it('mounts one overlay over the canvas, leaves the renderer as it is, and leaves no trace on dispose', () => {
     const { stats, renderer } = setup();
+    run(stats, 1);
     expect(document.querySelectorAll('.tez-stats')).toHaveLength(1);
-    expect(renderer.info.autoReset).toBe(false);
+    expect(document.getElementById('tez-stats-style')).not.toBeNull();
+    expect(renderer.info.autoReset).toBe(true);
+    expect(renderer.info.resets).toBe(0);
     must(open.pop()).dispose();
     expect(document.querySelectorAll('.tez-stats')).toHaveLength(0);
+    expect(document.getElementById('tez-stats-style')).toBeNull();
     expect(renderer.info.autoReset).toBe(true);
     expect(stats.element.isConnected).toBe(false);
+  });
+
+  it('keeps the stylesheet while another overlay lives', () => {
+    const first = setup().stats;
+    setup();
+    must(open.splice(open.indexOf(first), 1)[0]).dispose();
+    expect(document.getElementById('tez-stats-style')).not.toBeNull();
   });
 
   it('starts in the requested mode, and in simple for an unknown one', () => {
@@ -388,14 +399,14 @@ describe('Stats snapshot for agents and tools', () => {
     expect(json.budgets.calls).toBe(1000);
   });
 
-  it('lists live instances in a global array, unless told not to', () => {
-    const hook = (globalThis as unknown as Record<string, Stats[]>)['__THREE_EZ_STATS__'];
-    const before = hook.length;
-    const { stats } = setup();
-    expect(hook).toContain(stats);
-    expect(setup({ expose: false }).stats).toBeDefined();
-    expect(hook).toHaveLength(before + 1);
+  it('adds no global unless asked, and lists exposed instances while they live', () => {
+    const scope = globalThis as unknown as Record<string, Stats[] | undefined>;
+    Reflect.deleteProperty(scope, '__THREE_EZ_STATS__');
+    setup();
+    expect(scope['__THREE_EZ_STATS__']).toBeUndefined();
+    const { stats } = setup({ expose: true });
+    expect(scope['__THREE_EZ_STATS__']).toEqual([stats]);
     must(open.splice(open.indexOf(stats), 1)[0]).dispose();
-    expect(hook).not.toContain(stats);
+    expect(scope['__THREE_EZ_STATS__']).toEqual([]);
   });
 });

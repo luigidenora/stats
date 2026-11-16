@@ -3,6 +3,11 @@
  *
  * Works with `WebGLRenderer` and `WebGPURenderer` through a structural type, so the
  * package never imports a renderer at runtime.
+ *
+ * Read-only by default: it reads `renderer.info` as the app leaves it and never changes the
+ * renderer, the scene or `info.autoReset`. Two things are opt-in or opt-out, and documented:
+ * `countAllPasses` (switches autoReset off to sum every render() of a frame) and `gpuTimer`
+ * (timer queries on the app's WebGL context, or WebGPU timestamp resolves).
  */
 
 import { warnOnce } from './custom.js';
@@ -92,6 +97,9 @@ class WebGLTimer {
     }
 
     if (this._ext === null || this._active !== null || this._pending.length > 8) return;
+    // The app's own timer query is running: one of this kind may be active at a time, so this
+    // frame goes unmeasured rather than breaking the app's query.
+    if (this._gl.getQuery(this._ext.TIME_ELAPSED_EXT, this._gl.CURRENT_QUERY) !== null) return;
     // Typed non-null, but some engines return null while the context is lost.
     const query = this._gl.createQuery() as WebGLQuery | null;
     if (query === null) return;
@@ -162,6 +170,17 @@ export interface FrameWindow {
   gpu: number | null;
 }
 
+export interface SamplerOptions {
+  /**
+   * Sum every render() of a frame (post-processing, several views) by switching
+   * `renderer.info.autoReset` off and resetting it in begin(); restored on dispose. Off by default:
+   * the counters then show what `renderer.info` shows, the last render() of the frame.
+   */
+  countAllPasses?: boolean;
+  /** Measure GPU time (WebGL timer queries, WebGPU timestamp resolves). Default true. */
+  gpuTimer?: boolean;
+}
+
 export class FrameSampler {
   public readonly backend: BackendKind;
   /** Interval between the last two frames, in ms. */
@@ -200,13 +219,18 @@ export class FrameSampler {
   /** The last frame created at least one new shader program. */
   public compiled = false;
 
-  constructor(renderer: StatsRenderer) {
+  private readonly _countAllPasses: boolean;
+  private readonly _gpuTimer: boolean;
+
+  constructor(renderer: StatsRenderer, options: SamplerOptions = {}) {
     this._renderer = renderer;
     this.backend = detectBackend(renderer);
-    this._timer = renderer.isWebGPURenderer === true ? null : WebGLTimer.create(renderer);
-    // Count every render pass of a frame, not just the last one.
+    this._countAllPasses = options.countAllPasses === true;
+    this._gpuTimer = options.gpuTimer !== false;
+    this._timer = !this._gpuTimer || renderer.isWebGPURenderer === true ? null : WebGLTimer.create(renderer);
     this._infoAutoReset = renderer.info.autoReset;
-    renderer.info.autoReset = false;
+    // Opt-in only: the one change to the renderer the overlay can make, undone on dispose.
+    if (this._countAllPasses) renderer.info.autoReset = false;
   }
 
   /** Receives every GPU time sample as it resolves (per frame on WebGL, per refresh on WebGPU). */
@@ -217,7 +241,7 @@ export class FrameSampler {
 
   /** GPU time is measurable on this renderer and browser. */
   public get hasGpuTimer(): boolean {
-    return this._timer !== null || backendFlags(this._renderer).trackTimestamp === true;
+    return this._timer !== null || (this._gpuTimer && backendFlags(this._renderer).trackTimestamp === true);
   }
 
   public begin(): void {
@@ -228,7 +252,7 @@ export class FrameSampler {
     this._frameStart = now;
     this._inFrame = true;
     this._segment = null;
-    this._renderer.info.reset();
+    if (this._countAllPasses) this._renderer.info.reset();
     this._timer?.begin();
   }
 
@@ -341,7 +365,7 @@ export class FrameSampler {
 
   public dispose(): void {
     this._timer?.dispose();
-    this._renderer.info.autoReset = this._infoAutoReset;
+    if (this._countAllPasses) this._renderer.info.autoReset = this._infoAutoReset;
   }
 
   private closeSegment(name: string, start: number, now: number): void {
@@ -365,7 +389,7 @@ export class FrameSampler {
   private takeGpu(): number | null {
     if (this._timer !== null) return this._timer.take();
     const renderer = this._renderer;
-    if (backendFlags(renderer).trackTimestamp !== true || renderer.resolveTimestampsAsync === undefined) return null;
+    if (!this._gpuTimer || backendFlags(renderer).trackTimestamp !== true || renderer.resolveTimestampsAsync === undefined) return null;
 
     // WebGPU timestamps resolve asynchronously: show the latest value, request the next one.
     if (!this._resolving) {
