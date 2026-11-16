@@ -37,7 +37,7 @@ for (const path of packed) {
 
 const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as { repository?: { url?: string }; homepage?: string };
 const links = `${manifest.repository?.url ?? ''} ${manifest.homepage ?? ''}`;
-if (!links.includes('/stats')) problems.push(`repository / homepage do not point at this package: ${links}`);
+if (!(manifest.repository?.url ?? '').includes('/stats')) problems.push(`repository / homepage do not point at this package: ${links}`);
 
 const bundle = await import(pathToFileURL('build/index.js').href) as Record<string, unknown>;
 for (const name of EXPORTS) {

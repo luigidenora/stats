@@ -59,7 +59,7 @@
     "mcp",
     "agent"
   ],
-  "homepage": "https://github.com/luigidenora/stats#readme",
+  "homepage": "https://three-ez-stats.vercel.app",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/luigidenora/stats.git"

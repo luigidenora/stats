@@ -4,3 +4,6 @@ build/
 .impeccable/config.local.json
 site/
 coverage/
+.vercel/
+.vercel
+.env*

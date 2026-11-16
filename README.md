@@ -7,7 +7,7 @@ agents that help them.
 
 ![Performance mode: frame, CPU and GPU graphs, pacing rows and a recording in progress](docs/images/performance.png)
 
-**[Live demo](https://stats-demo.vercel.app)** · [Graph showcase](https://stats-demo.vercel.app/showcase.html) · [Extending guide](docs/extending.md) · [For agents](docs/agents.md) · [Tools spec](docs/tools-spec.md)
+**[Live demo](https://three-ez-stats.vercel.app)** · [Graph showcase](https://three-ez-stats.vercel.app/showcase.html) · [Extending guide](docs/extending.md) · [For agents](docs/agents.md) · [Tools spec](docs/tools-spec.md)
 
 ```sh
 npm install @three.ez/stats
