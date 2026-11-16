@@ -1,8 +1,9 @@
 # For agents
 
 `@three.ez/stats` is built to be read by AI agents as well as by people. An agent asked to "make
-this scene faster" needs three things a screenshot cannot give: the numbers, a verdict on them,
-and a way to check that a change helped. The overlay gives all three as plain JSON.
+this scene faster" needs what a screenshot cannot give: the numbers, where the cost sits, and a
+way to check that a change helped. The overlay gives them as plain JSON. It does not judge them:
+the agent does, from the budgets and the counters.
 
 ## The snapshot
 
@@ -15,11 +16,8 @@ const snapshot = stats.snapshot();
 | `frame` | Averages of the last refresh: `fps`, `cpu` and `gpu` in ms per frame, `heap` in MB |
 | `pacing` | Last 240 frames, in ms: `p95`, `worst`, `dropped` refreshes, `jitter` (standard deviation) |
 | `counters` | `calls`, `triangles`, `points`, `lines` of the last frame; `geometries`, `textures`, `programs` alive |
-| `budget`, `budgets`, `profile` | The frame budget in ms and the limits the checks compare against |
-| `findings` | What is wrong now: `id`, `title`, `message` (with the numbers), `advice` (one practical fix) |
-| `checks` | Every check with its `status`: `ok`, `warn` or `unchecked` |
+| `budget`, `budgets`, `profile` | The frame budget in ms, and the draw call and triangle budgets of the device profile |
 | `scene` | The scene survey (needs the `scene` option): meshes, instances, lights, shadows, materials, textures, estimated bytes, instancing candidates, the heaviest geometries and textures |
-| `camera` | Type, field of view, near, far, position (needs the `camera` option) |
 | `canvas` | Drawing buffer size, CSS size and pixel ratio |
 | `pressure` | `high`, `low` or `ok`: whether the frame has room |
 | `report` | The last finished recording |
@@ -59,10 +57,14 @@ registration is best effort, guarded, and has not been tested against a shipping
 
 ## A loop that works
 
-1. Call `three_stats_snapshot`. If `findings` is empty and `pacing.dropped` is 0, stop.
-2. Take the first finding. Its `advice` names the kind of fix; `scene` and `counters` say where
-   (for `instancing`, the groups of meshes that share geometry and material; for `texture-memory`,
-   `scene.topTextures`).
+1. Call `three_stats_snapshot`. If `pacing.dropped` is 0 and `pacing.p95` is within the budget, stop.
+2. Find where the cost sits:
+   - `frame.gpu` near or over `budget`: the GPU is the limit (pixels, shading, shadows, overdraw);
+   - `frame.cpu` near or over `budget`: the CPU is (draw calls, objects, scripts; `mark()` segments
+     in a report say which part);
+   - `counters.calls` or `counters.triangles` over `budgets`: the scene is heavy to submit;
+     `scene.instancingGroups` and `scene.largestInstancingGroup` point at copies to instance,
+     `scene.topTextures` and `scene.topGeometries` at the heaviest resources.
 3. Make one change.
 4. Call `three_stats_record` for 5 to 10 seconds, on the same camera path.
 5. Compare with the previous report: `fps.low1` and `frame.p95` first, then `dropped`,
@@ -74,10 +76,10 @@ Guidance for the agent:
 - Judge by `fps.low1`, `frame.p95` and `dropped`, not by the average frame rate.
 - Renderer counters are deterministic and comparable between runs. Timings vary run to run, and
   are not meaningful in a headless browser without a GPU.
-- `gpu` is `null` on browsers without a GPU timer. Then `gpu-bound` cannot fire: a low frame rate
-  with a low `cpu` suggests the GPU.
-- A finding appears after two failing seconds and clears after three passing ones: wait a few
-  seconds after a change before reading the snapshot.
+- `gpu` is `null` on browsers without a GPU timer: then a low frame rate with a low `cpu`
+  suggests the GPU.
+- The frame values average the last refresh and pacing covers the last 240 frames: wait a few
+  seconds after a change before reading the snapshot, or record.
 - Budgets are rules of thumb for a device class, not targets to hit exactly.
 
 ## Events and reports

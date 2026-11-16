@@ -14,7 +14,6 @@ colors:
   menu-ground: "#0c0c0b"
   menu-hover: "#262624"
   hairline: "#3a3a37"
-  info-backdrop: "#050505"
 typography:
   readout-value:
     fontFamily: "Barlow Condensed, Roboto Condensed, Arial Narrow, sans-serif"
@@ -114,7 +113,7 @@ components:
 
 **Creative North Star: "The Camera Display Over a Render Loop"**
 
-The overlay reads the way a technical camera display reads over a live image. Indicators hug the edges of the frame and the centre always belongs to the scene. There are no panels and no cards: values are drawn straight onto the canvas in white condensed tabular numerals, each with a 1px dark contour so it stays legible on any image. Containers exist only where a camera display would use them: small dark plates with a 1px white border for state (backend, mode, toggles), the mode menu, the tooltip, and the info pages.
+The overlay reads the way a technical camera display reads over a live image. Indicators hug the edges of the frame and the centre always belongs to the scene. There are no panels and no cards: values are drawn straight onto the canvas in white condensed tabular numerals, each with a 1px dark contour so it stays legible on any image. Containers exist only where a camera display would use them: small dark plates with a 1px white border for state (backend, mode, toggles), the mode menu and the tooltip.
 
 Density is high but disciplined. Detail is set by levels (display modes cycled with the mode plate), never all at once. Positions are fixed per mode, so numbers never jump between frames. Colour is almost absent: the readout is ink on image. Yellow is the only voice for "look here", red means a budget badly missed, and the three series colours (red, green, blue) appear only while the graph that uses them is on screen, where they add up like light.
 
@@ -135,7 +134,7 @@ The palette is ink on image, plus one signal colour and one series triad that on
 
 ### Primary
 - **Series colours:** frame blue, GPU green, CPU red (`--tez-frame`, `--tez-gpu`, `--tez-cpu`); the RGB histogram uses fixed light channels `--tez-ch-r/g/b`. In the merged time graph each series is scaled to its own recent min and max, so they always mix.
-- **Signal Yellow** (signal-yellow): the single "look here" colour. Used for readouts that cross their threshold, the current mode code on the mode plate, toggles that are on, the checked row of the mode menu (as a fill, with menu-ground text), the page count on info pages, keyboard focus outlines, time-graph samples that missed one refresh (past 1.25× budget), and the clipping marks on the histogram edges.
+- **Signal Yellow** (signal-yellow): the single "look here" colour. Used for readouts that cross their threshold, the current mode code on the mode plate, toggles that are on, the checked row of the mode menu (as a fill, with menu-ground text), keyboard focus outlines, time-graph samples that missed one refresh (past 1.25× budget), and the clipping marks on the histogram edges.
 
 ### Secondary
 - **Frame Red** (frame-red): the frame-time series and the first histogram channel.
@@ -155,12 +154,11 @@ The three channels are chosen to add up like light (yellow, cyan, magenta, white
 - **Menu Ground** (menu-ground, `--tez-ground`): the mode menu background, and the text colour on the yellow checked row.
 - **Menu Hover** (menu-hover, `--tez-hover`): the background of a hovered or focused menu row.
 - **Hairline** (hairline, `--tez-rule`): the dim separators between menu rows and info-page rows. The heading rule of an info page uses ink instead.
-- **Info Backdrop** (info-backdrop): the near-black field that covers the screen around the thumbnail in Info mode.
 
 ### Named Rules
 **The Yellow Means Look Rule.** Yellow is reserved for alerts and for the current choice. It never decorates, never labels a series, and never fills an area except the checked menu row.
 
-**The Colour Only With Its Graph Rule.** The labels of a readout carry the CPU and GPU series colours only while the Performance graphs are on screen. In every other mode they go back to ink. Glyphs and dials always stay ink, even inside an alert or a coloured label.
+**The Colour Only With Its Graph Rule.** The labels of a readout carry the frame, CPU and GPU series colours only while the Graph mode graphs are on screen. In every other mode they go back to ink. Glyphs and dials always stay ink, even inside an alert or a coloured label.
 
 **The Alerts Change Colour Only Rule.** An alert changes the colour of a value and nothing else: no weight change, no size change, no badge. The layout never moves.
 
@@ -179,7 +177,6 @@ The library does not load the font. It declares the stack and exposes it as `--t
 - **Unit** (600, 15px, 0.03em): a single unit set right after a number.
 - **Stacked label** (600, 11px, line-height 0.95, 0.04em, uppercase content): a two-line label pair such as MS over CPU, set beside its value and right-aligned towards it. It also sets histogram axis labels, graph asides and distribution level lists.
 - **Plate** (600, cap height 10px, so the font size is 10/0.7, 0.04em, uppercase content): the text inside plates. The capitals are trimmed with `text-box` and centred on whole pixels.
-- **Info key** (600, 15px, 0.04em, uppercase): left-hand keys on the info pages.
 - **Tooltip** (500, 13px, line-height 1.3, 0.01em): the only running text in the overlay, at most 280px wide.
 
 On overlays narrower than 640px (container query), the scale steps down: value 22, row 17, stack 10, unit 13, plate 16/8.
@@ -194,9 +191,11 @@ On overlays narrower than 640px (container query), the scale steps down: value 2
 The overlay is a fixed, full-viewport CSS grid of named areas, positioned over the canvas. It takes the pointer only on its interactive elements.
 
 - **Default arrangement** (three columns `1fr auto 1fr`, three rows `auto 1fr auto`): readout band top-left, right-edge rows top-right, large histogram under the band, distribution mid-right, counter grid bottom-left, mode graphs bottom-centre, backend plate plus toggles plus the mode plate bottom-right. The centre cell is always empty.
-- **Stacked** (when the strip does not fit between the corners): the graphs move up under the readouts, and counters and plates share the bottom row. **Tight**: the plates move above the counters. In Performance mode, if even the stacked strip is too wide, the frame, CPU and GPU graphs merge into one 220px graph.
-- **Info mode**: the canvas shrinks into a thumbnail cell (46% of the width, at most 720px, never taller than 40% of the height) with a 1px ink border. A near-black backdrop covers everything else, and key/value pages scroll in their own cell to the right. Below 720px the thumbnail goes edge to edge and the pages move under it.
-- **Side distribution**: the vertical distribution bar sits on the right edge only when the overlay is at least 720px wide and 420px tall. Otherwise it joins the bottom strip horizontally.
+- **Stacked** (when the strip does not fit between the corners): the graphs move up under the readouts, and counters and plates share the bottom row. **Tight**: the plates move above the counters. In Graph mode, if even the stacked strip is too wide, the frame, CPU and GPU graphs merge into one graph as wide as the row. In a stacked arrangement a vertical distribution joins the strip.
+- **Side distribution**: the vertical distribution bar sits on the right edge only when the overlay is at least 720px wide and 420px tall, and gets shorter to fit its row. Below 120px it joins the bottom strip horizontally.
+- **Short overlays** (under 480px tall): the narrow type sizes, whatever the width.
+- **Safe area**: the edge padding is the larger of the spacing token and `env(safe-area-inset-*)`.
+- **Modes are cumulative**: Simple shows the readout band without the heap; Performance adds the heap and the counter grid; Graph adds the time graphs and the pacing rows.
 
 Spacing uses a base-4 scale, and the layout maths reads the same custom properties back, so CSS and the arrangement code agree: space-1 inside a readout, space-2 between label and graph and between plates, space-3 between rows and as the overlay's vertical padding, space-4 for cell gaps and edge padding, space-5 between readouts in the band (16px on narrow overlays). Graph boxes are 132×32 (220×32 merged), the image histogram 256×88, and a strip holds at most four graphs.
 
@@ -208,13 +207,12 @@ The system is flat. Nothing is lifted with offset or blurred shadows. Depth come
 
 ### Shadow Vocabulary
 - **Distribution contour** (`box-shadow: 0 0 0 1px rgb(0 0 0 / 0.85)`): the 1px dark contour around the distribution bar, matching the text and graph contour.
-- **Info backdrop** (`box-shadow: 0 0 0 200vmax var(--tez-backdrop)`): a very large spread on the thumbnail cell, which blacks out the rest of the screen in Info mode while leaving the canvas inside it untouched.
 
 **The Contour Not Shadow Rule.** Separation from the image is always a centred 1px dark contour: text-stroke for text, geometry 1px wider for glyphs and graphs, spread-only box-shadow for boxes. Plates never get a contour.
 
 ## Shapes
 
-Corners are square throughout (0px): plates, menu, tooltip, graph boxes, thumbnail, distribution bar. Every rule is 1px. Horizontal and vertical edges are placed on whole or half pixels so they render sharp.
+Corners are square throughout (0px): plates, menu, tooltip, graph boxes, distribution bar. Every rule is 1px. Horizontal and vertical edges are placed on whole or half pixels so they render sharp.
 
 Glyphs are drawn on a 16-unit grid and rendered at 16px or a multiple of it. Their container tells you what kind of number follows:
 - **Per-frame work** (draw calls, triangles, points, lines): a free silhouette with no container, optionally contoured.
@@ -244,6 +242,8 @@ A camera-style list that opens upwards from the mode plate, aligned to its right
 - **Container:** menu-ground, 1px ink border, at least 200px wide, square, no text stroke.
 - **Rows:** mode name on the left, code on the right (semibold, 80% opacity), hairline separators. 15px medium (unit size), 8px 12px padding.
 - **States:** a hovered or focused row takes menu-hover. The current choice is filled signal yellow with menu-ground text. Escape or a click outside closes the menu.
+- **Folded toggles:** when the plate row has no room, the toggles of the mode follow the modes after a 2px ink rule, as checkable rows (description on the left, plate label on the right, yellow while on).
+- **Touch:** on a coarse pointer every plate takes taps from an invisible area 8px above and below and 4px to each side (half the plate gap), so a 16px plate is a 32px target and neighbours never overlap.
 
 ### Tooltip
 Instant, styled like a plate: plate-grey, 1px ink border, 4px 8px padding, at most 280px wide, tooltip type. It is hidden while the menu is open.
@@ -252,7 +252,7 @@ Instant, styled like a plate: plate-grey, 1px ink border, 4px 8px padding, at mo
 - **Band** (top-left, one row): FPS, CPU ms, GPU ms, heap MB. Each is a stacked label beside a 26px value, with 24px between readouts.
 - **Counter grid** (bottom-left): four columns of glyph and value pairs at 20px.
 - An unavailable value shows an em dash, never a fabricated zero.
-- **Pacing rows** (top-right, Performance only): P95 and PEAK frame time in ms and DROP (refreshes missed) over the last 240 frames, by the frame graph's 1.25× / 2.25× rule. Below them, one row per `stats.mark()` CPU segment, its plate the first four letters of the name.
+- **Pacing rows** (top-right, Graph only): P95 and PEAK frame time in ms and DROP (refreshes missed) over the last 240 frames, by the frame graph's 1.25× / 2.25× rule. Below them, one row per `stats.mark()` CPU segment, its plate the first four letters of the name.
 
 ### Time Graph
 A scrolling graph with one 1px track per sample, inside a 1px ink box.
@@ -262,23 +262,14 @@ A scrolling graph with one 1px track per sample, inside a 1px ink box.
 - An uncoloured series is coloured per sample: ink on time, signal yellow past 1.25× budget, clip red past 2.25×. Coloured series (CPU, GPU) composite additively.
 - One 1px contour surrounds the union of all series, so overlaps blend with no dark seam. The axis auto-scales to round steps (1, 2, 2.5, 5 × 10ⁿ), capped at twice the budget.
 
-### Image Histogram
-A 256×88 additive RGB histogram of the rendered image, in the same box language. The x axis is the value and the y axis is a square-root count. Edge bins never set the scale. A non-empty edge (more than 1% of pixels clipped) lights a 2px signal-yellow mark on that edge, and its HI/LO summary turns yellow. Axis labels sit underneath, and channel names are labels coloured by channel.
-
-### Image Scopes
-The waveform (128×64) and the vectorscope (64×64) are density plots in the same 1px ink box with the dark contour. They are the one place with a filled interior: a dark screen (`rgb(0 0 0 / 0.8)`) behind the points, because a density plot needs a ground to read on a bright scene. Waveform points are ink, with the clipped top row in alert yellow. Vectorscope points take the hue they stand for; a 5px ink cross marks neutral and six 2px marks the colour targets.
-
-### Canvas Aids
-Zebra and framing guides belong to the picture, not to the readouts: they sit under every cell. The zebra is the 256×144 image copy stretched with `image-rendering: pixelated`, so its stripes are chunky on purpose and crawl one step per refresh. Guides are 1px ink lines with a 1px dark contour on both sides, at the thirds, and a 9px centre cross. Both show only in Image mode.
+### Histogram
+A 256×88 additive histogram of up to three channels (red, green, blue), in the same box language; the Image example uses it for the rendered image. The x axis is the value and the y axis is a square-root count. Edge bins never set the scale. A non-empty edge (more than 1% of pixels clipped) lights a 2px signal-yellow mark on that edge, and its HI/LO summary turns yellow. Axis labels sit underneath, and channel names are labels coloured by channel.
 
 ### Event Marks
 Above the frame graph, outside the box: a 1×3 tick for a shader compile, the same tick with a 2×2 flag for an event marked by the app. Ink only; they never change colour.
 
 ### Distribution Bar
 One segment per level, 132×14 horizontal or 14px wide vertical, with a 1px ink border and contour, and segments separated by 2px of contour colour. The fills are monochrome patterns, in order: solid, hatched (135°), dotted, outline. With an RGB histogram on screen, the first three take the channel colours so bar and histogram read together.
-
-### Info Pages
-The camera-style detailed info screen. A heading row (600, 0.04em) with the page count in yellow sits over a 1px ink rule. Below it are key/value rows: uppercase key on the left, value on the right, hairline separators, space-2 vertical padding. Long pages scroll inside their cell with a thin ink scrollbar.
 
 ### Motion
 Layout changes use FLIP. Moved elements glide in 280ms (`cubic-bezier(0.22, 1, 0.36, 1)`). Elements that enter slide in from the nearest overlay edge. Elements that leave become a still copy that slides 8px past the nearest edge and fades out (`cubic-bezier(0.55, 0, 0.75, 0.2)`). With `prefers-reduced-motion: reduce`, changes are instant. Values never animate.

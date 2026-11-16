@@ -28,7 +28,7 @@ remembered across page loads, custom ones included (applied as soon as `defineMo
 ## Extend an existing mode
 
 ```ts
-stats.extendMode('performance', {
+stats.extendMode('graph', {
   graphs: [{ id: 'cpu.update', label: ['MS', 'UPD'], scale: 'budget', unit: 'ms', sample: 'frame', read: () => updateMs }]
 });
 ```
@@ -43,13 +43,13 @@ renderer.render(scene, camera);
 stats.end();
 ```
 
-Each segment becomes a row in Performance mode (plate: the first 4 letters, upper case). At most 4
+Each segment becomes a row in Graph mode (plate: the first 4 letters, upper case). At most 4
 segments; marks outside `begin()` / `end()` are ignored with one warning. The CPU readout stays the
 whole `begin()` → `end()` time, and the segments add up to it.
 
 ## Built-in pacing and shader events
 
-Performance mode also shows P95 and PEAK (worst) frame time and DROP, the refreshes missed over the last 240
+Graph mode also shows P95 and PEAK (worst) frame time and DROP, the refreshes missed over the last 240
 frames (ids `'p95'`, `'worst'`, `'dropped'`; turn them off with `exclude`). A tick above the frame
 graph marks a frame that created a new shader program, a common cause of a single spike. It reads
 the program count, so it fires on creation; with parallel or async compilation the stall can land
@@ -73,22 +73,26 @@ stats.extendMode('lod', {
 });
 ```
 
-`histogram: 'image'` uses the built-in histogram of the rendered image (the Image and Info modes
-show it). Values outside `domain` land in the edge bins, which turn yellow. Return a reused typed
+With `binned: true`, `read` returns counts per bin instead of raw values: `examples/image.ts`
+bins the rendered image itself and passes its R, G, B counts. Values outside `domain` land in the
+edge bins, which turn yellow. Return a reused typed
 array from `read` (it runs 4×/s). With a distribution bar in the same mode, its first three levels
 take the channel colours.
 
 ## Built-in modes
 
+The built-in modes build on each other; custom modes keep the Performance readouts and add their
+own content.
+
 | Mode | Shows |
 |---|---|
-| Simple | readouts only |
-| Performance | frame, CPU, GPU time graphs (merged into one RGB graph when space runs out); P95, PEAK and DROP rows; `stats.mark()` segments |
-| Mesh & instances | draw calls, triangles over time |
-| Memory | heap, geometries, textures over time |
-| Image | R, G, B histogram of the rendered image, clipping in yellow |
-| Info | canvas shrunk to a thumbnail (CSS transform, buffer untouched); pages: renderer, limits, programs, scene (`new Stats(renderer, { scene })`), diagnostics |
+| Simple | frame rate, CPU and GPU time |
+| Performance | Simple plus the JS heap and the counters (and the objects counter with a `scene`) |
+| Graph | Performance plus frame, CPU, GPU time graphs (merged into one RGB graph when space runs out), P95, PEAK and DROP rows, `stats.mark()` segments and REC |
 | Off | only the mode plate |
+
+`extendMode('graph', …)` adds to the graphs (at most four per mode, built-in ones included);
+`extendMode('performance', …)` adds to Performance only.
 
 ## Add a toggle (next to the mode plate)
 
@@ -97,7 +101,8 @@ stats.addControl({ id: 'lod.color', label: 'COLOR', description: 'Colour objects
 ```
 
 Inside `defineMode` / `extendMode`, put it in `controls: [...]`: it then shows only in that mode.
-The plate turns yellow while on. `label` is 1–5 characters.
+The plate turns yellow while on. `label` is 1–5 characters. When the plate row has no room (a
+phone), toggles move into the mode menu as checkable rows, with their `description` as the name.
 
 ## Add a counter with your own glyph
 
@@ -110,28 +115,6 @@ Glyphs are SVG paths on a 16×16 grid, filled in white (`stroke: 1.2` for lines)
 free silhouette with a dark contour, `'memory'` puts it on a plate. Two-direction graphs use
 `readBelow` (drawn below a middle zero line).
 
-## Add a diagnostic rule
-
-A rule returns a finding (`{ message, advice }`) when something is wrong and `null` when it is
-fine. Frame rules run once a second; rules with `scope: 'scene'` run on the scene survey every
-5 s, only with a `scene`. A finding shows on the TIP plate after two failing checks and goes after
-three passing ones (scene findings switch at once). A rule with an existing id replaces it; a
-rule that throws five times is switched off with one warning.
-
-```ts
-stats.addRule({
-  id: 'bodies', title: 'Too many bodies',
-  check: ({ profile }) => (world.bodies.length > (profile === 'mobile' ? 200 : 800)
-    ? { message: `${world.bodies.length} bodies.`, advice: 'Let bodies at rest sleep.' }
-    : null)
-});
-```
-
-The context passed to `check` holds the frame values (`fps`, `cpu`, `gpu`, `p95`, `jitter`,
-`calls`, `triangles`…), the device `profile` and its `budgets`, and the scene survey for scene
-rules. Values a backend cannot measure are `null`. Turn built-in rules off with
-`new Stats(renderer, { rules: ['small-draws'] })`, or all of them with `rules: false`.
-
 ## Events, recordings and the snapshot
 
 ```ts
@@ -141,20 +124,17 @@ const report = stats.stopRecording(); // or the REC plate; onReport receives eve
 const snapshot = stats.snapshot();    // everything as JSON (see agents.md)
 ```
 
-A rule you add shows up in all three places: on the TIP plate, in `snapshot.findings` and in
-`report.findings`.
-
 ## Controls from code, and helpers in the scene
 
 - `stats.setControl(id, active)` sets a toggle plate as a click would; `stats.removeControl(id)`
   removes it.
 - An object with `userData.statsIgnore = true` is left out of the scene survey, with its
-  children. Flag gizmos and helpers your plugin adds to the scene, so they do not raise tips.
+  children. Flag gizmos and helpers your plugin adds to the scene.
 
 ## Plugins in production
 
 Type a plugin against `@three.ez/stats/dev` when it should vanish with the overlay: in a
-production build every call (`defineMode`, `addMetric`, `addRule`…) lands on a no-op. Keep heavy
+production build every call (`defineMode`, `addMetric`, `addControl`…) lands on a no-op. Keep heavy
 plugin code behind a dynamic `import()` so it is not bundled either.
 
 ## Rules the overlay enforces

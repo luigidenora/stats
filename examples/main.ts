@@ -98,7 +98,7 @@ async function main() {
       console.table({ 'FPS average': report.fps.average, 'FPS 1% low': report.fps.low1, 'Frame P95 (ms)': report.frame.p95, 'Frame P99 (ms)': report.frame.p99, Dropped: report.dropped });
     },
     // A custom row uses the same mechanism as the built-in ones.
-    metrics: [{ id: 'instances', label: 'Instances drawn by the InstancedMesh', place: 'top', plate: 'INST', read: () => mesh.count }]
+    metrics: [{ id: 'instances', label: 'Instances drawn by the InstancedMesh', place: 'top', plate: 'INST', modes: ['performance', 'graph'], read: () => mesh.count }]
   });
   // A project-specific mode, defined outside the library (see lod.ts).
   addLodMode(stats, lodField);
