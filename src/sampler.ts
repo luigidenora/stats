@@ -306,6 +306,14 @@ export class FrameSampler {
     return this._segmentAverages.get(name) ?? null;
   }
 
+  /** Average CPU ms of every segment over the last refresh window, by name. */
+  public segments(): Record<string, number> {
+    const out: Record<string, number> = {};
+    const names = Array.from(this._segmentAverages.keys());
+    for (let i = 0, l = names.length; i < l; i++) out[names[i]] = this._segmentAverages.get(names[i]) ?? 0;
+    return out;
+  }
+
   /** Closes the current sampling window and returns its averages. */
   public take(): FrameWindow {
     const now = performance.now();

@@ -127,7 +127,7 @@ describe('Stats lifecycle', () => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
     now += 5000;
     run(stats, 0.03);
-    const fps = must(stats.element.querySelector<HTMLElement>('[data-tip^="Frames per second"]'));
+    const fps = must(stats.element.querySelector<HTMLElement>('[data-tip^="FPS"]'));
     expect(fps.textContent).toContain('60');
     run(stats, 1);
     expect(fps.textContent).toContain('60');
@@ -144,7 +144,7 @@ describe('Stats lifecycle', () => {
   it('writes the FPS readout at the refresh interval', () => {
     const { stats } = setup();
     run(stats, 1);
-    const fps = must(stats.element.querySelector<HTMLElement>('[data-tip^="Frames per second"]'));
+    const fps = must(stats.element.querySelector<HTMLElement>('[data-tip^="FPS"]'));
     expect(fps.textContent).toContain('60');
   });
 
@@ -228,7 +228,7 @@ describe('Stats budgets and diagnostics', () => {
     expect(stats.snapshot().scene).toBeNull();
   });
 
-  it('keeps a hidden-tab gap out of the pacing rows', () => {
+  it('keeps a hidden-tab gap out of the frame pacing', () => {
     const { stats } = setup({ mode: 'graph' });
     run(stats, 1);
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
@@ -236,8 +236,7 @@ describe('Stats budgets and diagnostics', () => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
     now += 900;
     run(stats, 1);
-    const peak = must(stats.element.querySelector<HTMLElement>('[data-tip^="Peak frame time"]'));
-    expect(peak.textContent).toContain('16.7');
+    expect(must(stats.snapshot().pacing).worst).toBeLessThan(17);
   });
 });
 
@@ -322,22 +321,6 @@ describe('Stats recording, events and pressure', () => {
     expect(report.backend).toBe('webgl');
     expect(stats.report).toBe(report);
     expect(onReport).toHaveBeenCalledWith(report);
-  });
-
-  it('records from the REC plate too, and shows the plate on while recording from code', () => {
-    const { stats } = setup({ mode: 'graph' });
-    const rec = must(Array.from(stats.element.querySelectorAll('button')).find((button) => button.textContent === 'REC'));
-    rec.click();
-    expect(stats.recording).toBe(true);
-    run(stats, 0.5);
-    rec.click();
-    expect(stats.recording).toBe(false);
-    expect(stats.report?.frames).toBeGreaterThan(20);
-    stats.startRecording();
-    expect(rec.getAttribute('aria-pressed')).toBe('true');
-    stats.stopRecording();
-    expect(rec.getAttribute('aria-pressed')).toBe('false');
-    expect(setup({ exclude: ['rec'] }).stats.element.textContent).not.toContain('REC');
   });
 
   it('keeps a hidden-tab gap out of a recording', () => {

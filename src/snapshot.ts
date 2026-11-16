@@ -32,6 +32,8 @@ export interface StatsSnapshot {
   frame: { fps: number | null; cpu: number | null; gpu: number | null; heap: number | null };
   /** Pacing of the last 240 frames, in ms: stutter the average hides. */
   pacing: FramePacing | null;
+  /** Average CPU ms per frame of each stats.mark() segment ('logic' is before the first mark). */
+  segments: Record<string, number>;
   /** Renderer counters of the last frame; memory counters are live objects on the GPU. */
   counters: { calls: number; triangles: number; points: number; lines: number; geometries: number; textures: number; programs: number | null; passes: number | null };
   canvas: { width: number; height: number; cssWidth: number; cssHeight: number; pixelRatio: number | null };

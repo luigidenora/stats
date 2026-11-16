@@ -104,23 +104,6 @@ describe('modes', () => {
     expect(stats.element.dataset['mode']).toBe('off');
   });
 
-  it('builds up the modes: Simple, then the heap and counters, then the graphs and pacing rows', () => {
-    const stats = setup({ mode: 'simple' });
-    run(stats, 0.5);
-    const heap = q(stats, '[data-tip^="JS heap"]');
-    const counters = q(stats, '.tez-c-counters');
-    const p95 = q(stats, '[data-tip^="P95"]');
-    const rec = must(Array.from(stats.element.querySelectorAll('button')).find((button) => button.textContent === 'REC'));
-    expect([heap.hidden, counters.hidden, p95.hidden, rec.hidden]).toEqual([true, true, true, true]);
-    stats.mode = 'performance';
-    expect([heap.hidden, counters.hidden, p95.hidden, rec.hidden]).toEqual([false, false, true, true]);
-    stats.mode = 'graph';
-    expect([heap.hidden, counters.hidden, p95.hidden, rec.hidden]).toEqual([false, false, false, false]);
-    stats.defineMode({ id: 'custom', name: 'Custom', code: 'CUST', description: 'x' });
-    stats.mode = 'custom';
-    expect([heap.hidden, counters.hidden, p95.hidden]).toEqual([false, false, true]);
-  });
-
   it('adds a custom mode to the cycle before Off, with its graphs, metrics, distribution and controls', () => {
     const stats = setup();
     const onChange = vi.fn();
@@ -242,6 +225,43 @@ describe('layout smoke test', () => {
     while (restore.length > 0) must(restore.pop())();
   });
 
+  it('builds up the modes: Simple, then the heap and counters, then the graphs', () => {
+    const stats = setup({ mode: 'simple' });
+    run(stats, 0.5);
+    const heap = q(stats, '[data-tip^="JS heap"]');
+    const counters = q(stats, '.tez-c-counters');
+    const graphs = (): number => stats.element.querySelectorAll('.tez-c-strip .tez-panel').length;
+    expect([heap.hidden, counters.hidden, graphs()]).toEqual([true, true, 0]);
+    stats.mode = 'performance';
+    expect([heap.hidden, counters.hidden, graphs()]).toEqual([false, false, 0]);
+    stats.mode = 'graph';
+    expect([heap.hidden, counters.hidden, graphs()]).toEqual([false, false, 3]);
+    stats.defineMode({ id: 'custom', name: 'Custom', code: 'CUST', description: 'x' });
+    stats.mode = 'custom';
+    expect([heap.hidden, counters.hidden, graphs()]).toEqual([false, false, 0]);
+    // No top-right rows and no REC plate any more.
+    expect(stats.element.querySelector('[data-tip^="P95"]')).toBeNull();
+    expect(Array.from(stats.element.querySelectorAll('button')).some((button) => button.textContent === 'REC')).toBe(false);
+  });
+
+  it('packs a custom mode top-left, under the readouts, and keeps tooltips off the built-in graphs', () => {
+    const stats = setup({ mode: 'graph' });
+    run(stats, 0.3);
+    expect(stats.element.querySelectorAll('.tez-c-strip [data-tip]')).toHaveLength(0);
+    stats.defineMode({
+      id: 'lod', name: 'LOD', code: 'LOD', description: 'x',
+      graphs: [{ id: 'lod.sw', label: ['LOD', 'SW/S'], scale: 'auto', unit: 'sw/s', read: () => 1 }],
+      metrics: [{ id: 'lod.saved', label: 'Saved', place: 'top', plate: 'SAVE', read: () => 40 }],
+      distribution: { id: 'lod.levels', label: ['LOD', 'LVL'], read: () => [3, 1] }
+    });
+    stats.mode = 'lod';
+    run(stats, 0.3);
+    const left = q(stats, '.tez-c-left');
+    expect(left.querySelectorAll('.tez-c-custom .tez-panel')).toHaveLength(2);
+    expect(left.querySelector('[data-tip="Saved"]')).not.toBeNull();
+    expect(stats.element.querySelectorAll('.tez-c-strip > *')).toHaveLength(0);
+  });
+
   it.each([1440, 420, 375])('lays out every mode at %ipx without throwing', (size) => {
     width = size;
     const stats = setup();
@@ -304,11 +324,11 @@ describe('toggles that do not fit', () => {
     expect(stats.element.classList.contains('tez-folded')).toBe(true);
     q(stats, '.tez-disp-more').click();
     const rows = Array.from(stats.element.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]'));
-    expect(rows.map((row) => row.textContent)).toEqual(['Record a sessionREC', 'WireframeWIRE']);
-    rows[1].click();
+    expect(rows.map((row) => row.textContent)).toEqual(['WireframeWIRE']);
+    rows[0].click();
     expect(onChange).toHaveBeenLastCalledWith(true);
     expect(q(stats, '.tez-menu').hidden).toBe(true);
     q(stats, '.tez-disp-more').click();
-    expect(stats.element.querySelectorAll('[role="menuitemcheckbox"]')[1].getAttribute('aria-checked')).toBe('true');
+    expect(stats.element.querySelectorAll('[role="menuitemcheckbox"]')[0].getAttribute('aria-checked')).toBe('true');
   });
 });

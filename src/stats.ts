@@ -1,6 +1,6 @@
 import { resolveBudgets, type Budgets, type DeviceProfile } from './budgets.js';
 import { warnOnce } from './custom.js';
-import { formatCount, formatInt, formatMs, type Threshold } from './format.js';
+import type { Threshold } from './format.js';
 import { FrameStats, type FramePacing } from './frame-stats.js';
 import { surveyScene, type InfoScene, type SceneSurvey } from './scene-survey.js';
 import { findMode, MODES } from './modes.js';
@@ -9,7 +9,7 @@ import { Recorder, type MemoryCounters, type StatsReport } from './recorder.js';
 import { summariseScene, type StatsSnapshot } from './snapshot.js';
 import { Overlay, type FrameThresholds } from './overlay.js';
 import type { ControlDefinition, ModeContent, ModeDefinition, StatsMetric, StatsMode } from './types.js';
-import { FIRST_SEGMENT, FrameSampler, type StatsRenderer } from './sampler.js';
+import { FrameSampler, type StatsRenderer } from './sampler.js';
 
 const STORAGE_KEY = 'tez-stats-mode';
 /** The pressure signal is sampled once a second. */
@@ -45,7 +45,7 @@ export interface StatsOptions {
   thresholds?: FrameThresholds;
   /**
    * Turn off built-ins by id: the counters 'calls', 'triangles', 'points', 'lines', 'geometries',
-   * 'textures', 'programs', 'objects', the Graph rows 'p95', 'worst', 'dropped', and the 'rec' plate.
+   * 'textures', 'programs', 'objects'.
    */
   exclude?: readonly string[];
   /** Extra metrics, added after the built-in ones. */
@@ -200,13 +200,9 @@ export class Stats {
     this._onPressure = options.onPressure ?? null;
     this._onReport = options.onReport ?? null;
 
-    this._sampler.onSegment = (name): void => {
-      this._overlay.addMetric(segmentMetric(name, () => this._sampler.segment(name)));
-    };
-
     const exclude = options.exclude ?? [];
     this._excluded = exclude;
-    const builtins = builtinMetrics(this._sampler, this._budgets, this._profile).concat(pacingMetrics(this._budget, () => this._pacingSummary));
+    const builtins = builtinMetrics(this._sampler, this._budgets);
     for (let i = 0, l = builtins.length; i < l; i++) {
       if (!exclude.includes(builtins[i].id)) this._overlay.addMetric(builtins[i]);
     }
@@ -214,7 +210,6 @@ export class Stats {
     if (this._scene !== null) this.showObjects();
     const extra = options.metrics ?? [];
     for (let i = 0, l = extra.length; i < l; i++) this._overlay.addMetric(extra[i]);
-    if (!exclude.includes('rec')) this._overlay.addControl(this.recControl());
 
     document.body.appendChild(this._overlay.root);
     this._resizeObserver = new ResizeObserver(this._onLayout);
@@ -292,13 +287,11 @@ export class Stats {
 
   /**
    * Starts recording every frame for a report: averages, percentiles, the 1% low frame rate,
-   * dropped refreshes, counters, memory and events. The REC plate
-   * (Graph mode) does the same.
+   * dropped refreshes, counters, memory and events.
    */
   public startRecording(): this {
     if (this._recorder !== null) return this;
     this._recorder = new Recorder(this.memory());
-    this._overlay.setControl('rec', true);
     return this;
   }
 
@@ -307,7 +300,6 @@ export class Stats {
     const recorder = this._recorder;
     if (recorder === null) return null;
     this._recorder = null;
-    this._overlay.setControl('rec', false);
     const report = recorder.finish(this.memory(), { budget: this._budget, profile: this._profile, backend: this._sampler.backend });
     if (report === null) return null;
     this._report = report;
@@ -349,6 +341,7 @@ export class Stats {
       budgets: { ...this._budgets },
       frame: { ...this._lastFrame },
       pacing: this._pacingSummary === null ? null : { ...this._pacingSummary },
+      segments: sampler.segments(),
       counters: {
         calls: sampler.calls, triangles: sampler.triangles, points: sampler.points, lines: sampler.lines,
         geometries: sampler.geometries, textures: sampler.textures, programs: sampler.programs, passes: sampler.passes
@@ -408,7 +401,7 @@ export class Stats {
   }
 
   /**
-   * Splits the CPU time of a frame into named segments, shown as rows in Graph mode. The time
+   * Splits the CPU time of a frame into named segments, read from `snapshot().segments`. The time
    * from begin() to the first mark is 'logic'; each mark closes the previous segment and the last
    * one ends at end(). Names show on a plate as their first 4 letters; at most 4 segments.
    *
@@ -538,36 +531,6 @@ export class Stats {
     if (signal !== null && this._onPressure !== null) this.guard('onPressure', () => this._onPressure?.(signal));
   }
 
-  /** The REC plate: a click starts a recording, the next one stops it; its tooltip shows the last report. */
-  private recControl(): ControlDefinition {
-    const row = (key: string, value: string): readonly [string, string] => [key, value];
-    return {
-      id: 'rec',
-      label: 'REC',
-      description: 'Record a session',
-      modes: ['graph'],
-      onChange: (active) => {
-        if (active) this.startRecording();
-        else this.stopRecording();
-      },
-      tip: {
-        title: 'Record',
-        text: 'Click to start, again to stop. Read it from stats.report.',
-        values: () => {
-          const report = this._report;
-          if (this.recording) return [row('State', 'Recording…')];
-          if (report === null) return [];
-          return [
-            row('Duration', `${report.duration.toFixed(1)} s`),
-            row('FPS / 1% low', `${formatInt(report.fps.average)} / ${formatInt(report.fps.low1)}`),
-            row('P95 / P99', `${formatMs(report.frame.p95)} / ${formatMs(report.frame.p99)} ms`),
-            row('Dropped', formatInt(report.dropped))
-          ];
-        }
-      }
-    };
-  }
-
   /**
    * The shared scene survey, retaken when older than `maxAge`. Null without a scene or when the
    * scene cannot be traversed right now (e.g. mid-teardown): a survey must never break a frame.
@@ -643,25 +606,17 @@ function defaultThresholds(budget: number): FrameThresholds {
   return { fps: { below: (1000 / budget) * 0.9 }, cpu: over, gpu: over };
 }
 
-function builtinMetrics(sampler: FrameSampler, budgets: Budgets, profile: DeviceProfile): StatsMetric[] {
+function builtinMetrics(sampler: FrameSampler, budgets: Budgets): StatsMetric[] {
   return [
     {
       id: 'calls', label: 'Draw calls', glyph: 'calls',
       threshold: { above: budgets.calls }, read: () => sampler.calls,
-      tip: {
-        title: 'Draw calls',
-        text: 'Per frame.',
-        legend: [{ mark: 'alert', text: `Over the ${profile} budget, ${formatCount(budgets.calls)}` }]
-      }
+      tip: { title: 'Draw calls', text: 'Per frame.' }
     },
     {
       id: 'triangles', label: 'Triangles', glyph: 'triangles',
       threshold: { above: budgets.triangles }, read: () => sampler.triangles, width: 5,
-      tip: {
-        title: 'Triangles',
-        text: 'Per frame, every pass included.',
-        legend: [{ mark: 'alert', text: `Over the ${profile} budget, ${formatCount(budgets.triangles)}` }]
-      }
+      tip: { title: 'Triangles', text: 'Per frame.' }
     },
     { id: 'points', label: 'Points', glyph: 'points', read: () => sampler.points },
     { id: 'lines', label: 'Lines', glyph: 'lines', read: () => sampler.lines },
@@ -669,51 +624,4 @@ function builtinMetrics(sampler: FrameSampler, budgets: Budgets, profile: Device
     { id: 'textures', label: 'Textures', glyph: 'textures', read: () => sampler.textures },
     { id: 'programs', label: 'Shader programs', glyph: 'programs', read: () => sampler.programs }
   ];
-}
-
-/** Frame pacing rows, beside the graphs: stutter that the FPS average hides. */
-function pacingMetrics(budget: number, pacing: () => FramePacing | null): StatsMetric[] {
-  const modes = ['graph'];
-  return [
-    {
-      id: 'p95', label: 'P95 frame time',
-      place: 'top', plate: 'P95', unit: 'MS', format: formatMs, width: 4, modes,
-      threshold: { above: budget * 1.25 }, read: () => pacing()?.p95 ?? null,
-      tip: {
-        title: 'P95 frame time',
-        text: '95% of the last 240 frames were faster.',
-        legend: [{ mark: 'alert', text: 'Over 1.25× the budget' }]
-      }
-    },
-    {
-      id: 'worst', label: 'Peak frame time',
-      place: 'top', plate: 'PEAK', unit: 'MS', format: formatMs, width: 4, modes,
-      threshold: { above: budget * 2.25 }, read: () => pacing()?.worst ?? null,
-      tip: {
-        title: 'Peak frame time',
-        text: 'Slowest of the last 240 frames.',
-        legend: [{ mark: 'alert', text: 'Missed two or more refreshes' }]
-      }
-    },
-    {
-      id: 'dropped', label: 'Dropped refreshes',
-      place: 'top', plate: 'DROP', format: formatInt, width: 3, modes,
-      threshold: { above: 0 }, read: () => pacing()?.dropped ?? null,
-      tip: {
-        title: 'Dropped refreshes',
-        text: 'Screen refreshes missed in the last 240 frames.',
-        legend: [{ mark: 'alert', text: 'Any' }]
-      }
-    }
-  ];
-}
-
-/** A row for one stats.mark() segment. */
-function segmentMetric(name: string, read: () => number | null): StatsMetric {
-  const first = name === FIRST_SEGMENT;
-  return {
-    id: `segment.${name}`,
-    label: first ? 'CPU ms before the first mark()' : `CPU ms in mark('${name}')`,
-    place: 'top', plate: name.slice(0, 4).toUpperCase(), unit: 'MS', format: formatMs, width: 4, modes: ['graph'], read
-  };
 }

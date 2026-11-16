@@ -149,15 +149,19 @@ function formatter(graph: GraphDefinition): (value: number | null) => string {
 }
 
 /** Two-line label, graph and the value at the top of the graph ("MAX"). Shared by built-in and custom graphs. */
-export function graphPanel(timeGraph: TimeGraph, label: HTMLElement, unit: string, format: (v: number | null) => string, data: Samples, tip: string, rich?: TipContent): Panel {
+/**
+ * A graph with its label and scale. With `tooltips` false (the built-in graphs) nothing in it
+ * shows a tooltip: `tip` is only the text alternative for assistive technology.
+ */
+export function graphPanel(timeGraph: TimeGraph, label: HTMLElement, unit: string, format: (v: number | null) => string, data: Samples, tip: string, rich?: TipContent, tooltips = true): Panel {
   const scale = el('span', '', '—');
   const normalized = timeGraph.normalized;
-  const aside = hit(el('span', 'tez-stack tez-aside'), normalized
-    ? `Slowest visible frame, in ${unit}`
-    : `Top of the scale, in ${unit}`);
+  const aside = el('span', 'tez-stack tez-aside');
+  if (tooltips) hit(aside, normalized ? `Slowest visible frame, in ${unit}` : `Top of the scale, in ${unit}`);
   aside.append(el('span', '', normalized ? 'PEAK' : 'MAX'), scale);
   const element = el('div', 'tez-panel');
-  const plot = rich === undefined ? hit(el('div', 'tez-panel-plot'), tip) : setTip(el('div', 'tez-panel-plot'), rich);
+  const plain = el('div', 'tez-panel-plot');
+  const plot = !tooltips ? plain : rich === undefined ? hit(plain, tip) : setTip(plain, rich);
   plot.append(timeGraph.element);
   element.append(label, plot, aside);
   return {
@@ -182,7 +186,9 @@ export function graphPanel(timeGraph: TimeGraph, label: HTMLElement, unit: strin
       }
 
       const n = timeGraph.span;
-      setLabel(timeGraph.element, `${tip} Recent range: ${format(data.min(n))} to ${format(data.max(n))} ${unit}.`);
+      const text = `${tip} Recent range: ${format(data.min(n))} to ${format(data.max(n))} ${unit}.`;
+      if (tooltips) setLabel(timeGraph.element, text);
+      else timeGraph.element.setAttribute('aria-label', text);
     }
   };
 }

@@ -53,8 +53,8 @@ const CSS = `
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
-    'band     .     rows'
-    'hist     .     side'
+    'left     .     .'
+    '.        .     .'
     'counters strip backend';
   gap: var(--tez-space-3) var(--tez-space-4);
   /* Safe area: under a notch or a home indicator the edges move in (env() is 0 elsewhere; pages
@@ -81,7 +81,7 @@ const CSS = `
 .tez-stats [hidden] { display: none !important; }
 .tez-stats * { box-sizing: border-box; }
 .tez-stats svg, .tez-stats canvas { display: block; flex: none; }
-.tez-rows { display: grid; justify-items: end; gap: var(--tez-space-1); }
+.tez-rows { display: grid; justify-items: start; gap: var(--tez-space-1); }
 .tez-row { display: flex; align-items: center; gap: var(--tez-space-2); height: var(--tez-size-row); font-size: var(--tez-size-row); }
 .tez-interactive .tez-hit {
   pointer-events: auto;
@@ -148,10 +148,11 @@ const CSS = `
 /* The mode menu replaces the tooltip while it is open. */
 .tez-stats:has(.tez-menu:not([hidden])) .tez-tip { display: none; }
 .tez-c { min-width: 0; }
-.tez-c-band { grid-area: band; justify-self: start; align-self: start; }
-.tez-c-side { grid-area: side; justify-self: end; align-self: center; }
-.tez-c-hist { grid-area: hist; justify-self: start; align-self: start; }
-.tez-c-hist:empty { display: none; }
+/* Top-left column: readouts, then a custom mode's rows, histogram, graphs and distribution,
+   packed one under the other with the row gap: no empty grid cells between them. */
+.tez-c-left { grid-area: left; justify-self: start; align-self: start; display: flex; flex-direction: column; flex-wrap: wrap; align-content: flex-start; align-items: flex-start; gap: var(--tez-space-3) var(--tez-space-5); }
+.tez-c-hist:empty, .tez-c-custom:empty, .tez-rows:empty { display: none; }
+.tez-c-custom { display: grid; gap: var(--tez-space-3); justify-items: start; }
 /* Large histogram: label left, plot with its axis row underneath, summary right. */
 .tez-histogram { align-items: start; }
 .tez-axis-row {
@@ -163,9 +164,7 @@ const CSS = `
   letter-spacing: 0.04em;
 }
 .tez-legend { display: flex; gap: var(--tez-space-2); }
-.tez-c-side:empty { display: none; }
 .tez-c-backend { grid-area: backend; justify-self: end; align-self: end; }
-.tez-c-rows { grid-area: rows; justify-self: end; align-self: start; }
 .tez-c-counters { grid-area: counters; justify-self: start; align-self: end; }
 .tez-c-strip { grid-area: strip; justify-self: center; align-self: end; }
 .tez-c-counters { display: grid; gap: var(--tez-space-3); justify-items: start; }
@@ -285,14 +284,17 @@ const CSS = `
 .tez-stacked {
   grid-template-columns: minmax(0, 1fr) auto;
   /* Narrow: the graphs move up, right under the readouts; counters and plates share the bottom row. */
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
-  grid-template-areas: 'band band' 'strip strip' 'hist hist' '. .' '. rows' 'counters backend';
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: 'left left' 'strip strip' '. .' 'counters backend';
 }
 .tez-stacked .tez-c-strip { justify-self: start; align-self: start; }
-.tez-stacked .tez-c-rows { align-self: end; }
 /* Very narrow: the plates move above the counters instead of overlapping them. */
-.tez-stacked.tez-tight { grid-template-rows: auto auto auto minmax(0, 1fr) auto auto auto; grid-template-areas: 'band band' 'strip strip' 'hist hist' '. .' '. rows' '. backend' 'counters counters'; }
-.tez-strip.tez-column { grid-auto-flow: row; justify-items: start; }
+.tez-stacked.tez-tight { grid-template-rows: auto auto minmax(0, 1fr) auto auto; grid-template-areas: 'left left' 'strip strip' '. .' '. backend' 'counters counters'; }
+/* Compact graphs (a phone): all three stay in one row, each with its name above and no scale. */
+.tez-strip.tez-compact { gap: var(--tez-space-3); }
+.tez-compact .tez-panel { grid-template-columns: auto; gap: var(--tez-space-1); justify-items: start; }
+.tez-compact .tez-panel > .tez-stack { text-align: left; }
+.tez-compact .tez-graph-unit, .tez-compact .tez-aside { display: none; }
 .tez-grid { display: grid; grid-template-columns: repeat(4, max-content); gap: var(--tez-space-2) var(--tez-space-5); font-size: var(--tez-size-row); }
 .tez-grid:empty { display: none; }
 .tez-pair { display: flex; align-items: center; gap: var(--tez-space-1); }
@@ -316,7 +318,6 @@ const CSS = `
 .tez-cpu { color: var(--tez-cpu); }
 .tez-gpu { color: var(--tez-gpu); }
 /* The readout labels carry the series colour only while the graphs that use it are on screen. */
-.tez-stats:not([data-mode='graph']) .tez-c-band .tez-frame,
 .tez-stats:not([data-mode='graph']) .tez-c-band .tez-cpu,
 .tez-stats:not([data-mode='graph']) .tez-c-band .tez-gpu { color: inherit; }
 .tez-plate {

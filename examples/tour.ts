@@ -59,14 +59,6 @@ function boxOf(root: HTMLElement, ...selectors: string[]): () => DOMRect | null 
   };
 }
 
-/** A button of the overlay by its plate text. */
-function plate(root: HTMLElement, label: string): () => DOMRect | null {
-  return () => {
-    const button = Array.from(root.querySelectorAll('button')).find((entry) => entry.textContent === label && entry.offsetParent !== null);
-    return button === undefined ? null : button.getBoundingClientRect();
-  };
-}
-
 /** Blocks the main thread for `ms` inside the next animation frame: one late frame, on purpose. */
 function hitch(ms: number): void {
   requestAnimationFrame(() => {
@@ -146,7 +138,7 @@ export function startTour(context: TourContext, options: { autoplay: boolean }):
     { target: boxOf(root, '.tez-disp'), title: 'One plate', text: 'Four levels of detail. Click for the next, the arrow opens the list.' },
     { mode: 'performance', target: boxOf(root, '.tez-c-counters'), title: 'Performance', text: 'Plus the JS heap and the renderer counters. Yellow past the device budget.' },
     { target: boxOf(root, '.tez-c-counters [data-tip^="Objects in the scene"]'), title: 'Objects', text: 'With a scene: every node in it, counted once a second.', seconds: 3.4 },
-    { mode: 'graph', target: boxOf(root, '.tez-c-strip'), title: 'Graph', text: 'Frame, CPU and GPU over time. Each column keeps its slowest frame.' },
+    { mode: 'graph', target: boxOf(root, '.tez-c-strip'), title: 'Graph', text: 'Frame, CPU and GPU over time. On a phone they stay, just narrower.' },
     {
       target: boxOf(root, '.tez-c-strip .tez-panel:first-child'), title: 'Late frames',
       text: 'A 45 ms hitch, on purpose: yellow missed one refresh, red two or more. The flag is stats.event().',
@@ -164,9 +156,8 @@ export function startTour(context: TourContext, options: { autoplay: boolean }):
         setTimeout(context.compileShader, 600);
       }
     },
-    { target: boxOf(root, '[data-tip^="P95"]', '[data-tip^="Peak"]', '[data-tip^="Dropped"]'), title: 'What averages hide', text: 'P95, the worst frame and the refreshes missed, over the last 240 frames.' },
     {
-      target: plate(root, 'REC'), title: 'Record', text: 'Start a run, stop it, get a report.',
+      title: 'Record', text: 'stats.startRecording(), then stopRecording(): a report.',
       code: () => `Recording… ${((performance.now() - since) / 1000).toFixed(1)} s`,
       enter: () => {
         since = performance.now();
@@ -175,7 +166,7 @@ export function startTour(context: TourContext, options: { autoplay: boolean }):
       seconds: 4
     },
     {
-      target: plate(root, 'REC'), title: 'Report', text: 'Compare before and after, or assert it in CI.', code: report,
+      title: 'Report', text: 'What averages hide. Compare runs, or assert it in CI.', code: report,
       enter: () => {
         stats.stopRecording();
       },

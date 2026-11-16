@@ -51,7 +51,7 @@ class NoopStats implements PublicKeys {
   public snapshot(): StatsSnapshot {
     return {
       version: 2, mode: 'off', backend: 'webgl', profile: 'desktop', budget: 1000 / 60, budgets: { ...BUDGETS },
-      frame: { fps: null, cpu: null, gpu: null, heap: null }, pacing: null,
+      frame: { fps: null, cpu: null, gpu: null, heap: null }, pacing: null, segments: {},
       counters: { calls: 0, triangles: 0, points: 0, lines: 0, geometries: 0, textures: 0, programs: null, passes: null },
       canvas: { width: 0, height: 0, cssWidth: 0, cssHeight: 0, pixelRatio: null },
       pressure: 'ok', scene: null, recording: false, report: null

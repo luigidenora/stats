@@ -162,7 +162,8 @@ export class TimeGraph {
     // keeps the box itself aligned with the layout.
     this.element.style.margin = `-${PAD}px`;
     this.applySize();
-    this.element.dataset['tip'] = label;
+    // An empty label would still be a tooltip target (an empty box): set only a real one.
+    if (label !== '') this.element.dataset['tip'] = label;
     this.element.setAttribute('role', 'img');
     this.element.setAttribute('aria-label', label);
     this._ctx = this.element.getContext('2d') as CanvasRenderingContext2D;

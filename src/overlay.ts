@@ -55,7 +55,7 @@ interface Content {
   histogram: HistogramPanel | null;
 }
 
-type PanelName = 'frame' | 'cpu' | 'gpu' | 'time';
+type PanelName = 'frame' | 'cpu' | 'gpu';
 
 /**
  * What each built-in mode adds; modes are cumulative. Simple: FPS and CPU / GPU time. Performance:
@@ -75,10 +75,9 @@ const BACKEND_PLATES: Record<BackendKind, [string, string]> = {
 
 /** Graph sizes: the bottom edge belongs to the graphs now, so they can be generous. */
 const GRAPH = 132;
-const MERGED = 220;
 const HEIGHT = 32;
-/** The merged graph's height on overlays narrower than 640px. */
-const NARROW_HEIGHT = 40;
+/** Compact graphs (a phone) never get narrower than this. */
+const MIN_GRAPH = 48;
 
 const ms = (value: number | null): string => (value === null ? '—' : formatMs(value));
 const mb = (value: number | null): string => (value === null ? '—' : formatInt(value));
@@ -90,17 +89,18 @@ export class Overlay {
   /** Backend plate and the mode plate, bottom-right. */
   private readonly _plates = el('div', 'tez-c tez-c-backend');
   private readonly _toggles: Toggle[] = [];
-  private readonly _rows = el('div', 'tez-c tez-c-rows tez-rows');
+  /** Top-left column: the readouts, then a custom mode's rows, histogram, graphs and distribution, packed. */
+  private readonly _left = el('div', 'tez-c tez-c-left');
+  private readonly _rows = el('div', 'tez-rows');
   private readonly _counters = el('div', 'tez-c tez-c-counters');
   private readonly _grid = el('div', 'tez-grid');
   /** FPS, CPU, GPU and heap on one row, top-left. */
-  private readonly _band = el('div', 'tez-c tez-c-band tez-band');
+  private readonly _band = el('div', 'tez-c-band tez-band');
   private readonly _strip = el('div', 'tez-c tez-c-strip tez-strip');
-  /** Right edge, mid height: a mode's distribution sits here, vertical, when there is room. */
-  private readonly _side = el('div', 'tez-c tez-c-side');
-  /** Top-left, under the readouts: the large histogram of the current mode. */
-  private readonly _hist = el('div', 'tez-c tez-c-hist');
-  private _distributionOnSide = false;
+  /** In the left column: the large histogram of a custom mode. */
+  private readonly _hist = el('div', 'tez-c-hist');
+  /** In the left column: a custom mode's graphs and distribution. */
+  private readonly _custom = el('div', 'tez-c-custom');
   private readonly _slots: Slot[] = [];
   private readonly _fps: Writable;
   private readonly _heap: Writable;
@@ -113,8 +113,6 @@ export class Overlay {
   };
 
   private readonly _panels: Record<PanelName, Panel>;
-  /** The merged frame / GPU / CPU graph: it grows to the row width and gets taller on narrow overlays. */
-  private readonly _timeGraph: TimeGraph;
   private readonly _budget: number;
   private readonly _step: number;
   private readonly _control: ModeControl | null;
@@ -123,7 +121,6 @@ export class Overlay {
   private readonly _modes: ModeInfo[] = [...MODES];
   private readonly _content = new Map<StatsMode, Content>();
   private _mode: StatsMode;
-  private _merged = false;
   /** The plate row has no room for the toggles: they move into the mode menu. */
   private _folded = false;
   /** Current arrangement; a change triggers the FLIP transition. */
@@ -131,7 +128,6 @@ export class Overlay {
   /** Values of the last refresh, read by the live rows of the readout tooltips. */
   /** Ids of the custom graphs added so far, to refuse duplicates. */
   private readonly _graphIds = new Set<string>();
-  private _last: { frame: FrameValues; thresholds: FrameThresholds } = { frame: { fps: null, cpu: null, gpu: null }, thresholds: {} };
   /** Running maximum of the frames in the column being built; -1 while empty. */
   private readonly _pending = { frames: 0, interval: -1, cpu: -1, gpu: -1, lastGpu: -1, compiled: false, event: false };
 
@@ -147,19 +143,15 @@ export class Overlay {
     this.root.setAttribute('role', 'group');
     this.root.setAttribute('aria-label', 'Renderer statistics');
 
-    const last = (): { frame: FrameValues; thresholds: FrameThresholds } => this._last;
-    this._fps = readout(fpsTip(budget, last), stack('AVG', 'FPS', 'tez-frame'), 3);
-    this._heap = readout(heapTip(last), stack('MB', 'HEAP'), 4);
-    this._cpu = new TimeReadout(setTip(el('span', 'tez-value'), timeTip('cpu', budget, last)), 'CPU frame time', 4);
+    // Atomic tooltips: what the number is, nothing more.
+    this._fps = readout({ title: 'FPS', text: 'Frames per second.' }, stack('AVG', 'FPS'), 3);
+    this._heap = readout({ title: 'JS heap', text: 'MB used by JavaScript.' }, stack('MB', 'HEAP'), 4);
+    this._cpu = new TimeReadout(setTip(el('span', 'tez-value'), { title: 'CPU time', text: 'Per frame, in ms.' }), 'CPU frame time', 4);
     this._cpu.element.append(this._cpu.dial, stack('MS', 'CPU', 'tez-cpu'), this._cpu.value);
-    this._gpu = new TimeReadout(setTip(el('span', 'tez-value'), timeTip('gpu', budget, last)), 'GPU frame time', 4);
+    this._gpu = new TimeReadout(setTip(el('span', 'tez-value'), { title: 'GPU time', text: 'Per frame, in ms.' }), 'GPU frame time', 4);
     this._gpu.element.append(this._gpu.dial, stack('MS', 'GPU', 'tez-gpu'), this._gpu.value);
     this._band.append(this._fps.element, this._cpu.element, this._gpu.element, this._heap.element);
 
-    const s = this._samples;
-    this._timeGraph = new TimeGraph(budget, [{ samples: s.frame, color: 'frame' }, { samples: s.gpu, color: 'gpu' }, { samples: s.cpu, color: 'cpu' }], {
-      width: MERGED, height: HEIGHT, vertical: false, autoScale: false, normalize: true, events: s.compiles, lane: s.frame, label: ''
-    });
     this._panels = this.buildPanels();
     this._control = interactive
       ? new ModeControl(this._mode, () => this._modes, (mode) => {
@@ -171,7 +163,8 @@ export class Overlay {
     this._plates.append(this._backend);
     if (this._control !== null) this._plates.append(this._control.element);
     this._counters.append(this._grid);
-    this.root.append(this._band, this._rows, this._hist, this._side, this._counters, this._strip, this._plates);
+    this._left.append(this._band, this._rows, this._hist, this._custom);
+    this.root.append(this._left, this._counters, this._strip, this._plates);
     this._tooltip = new Tooltip(this.root);
     this.applyMode();
   }
@@ -343,7 +336,6 @@ export class Overlay {
   /** Refreshes every text value. Called a few times per second. */
   public refresh(frame: FrameValues, budget: number, thresholds: FrameThresholds): void {
     const heap = frame.heap ?? null;
-    this._last = { frame, thresholds };
     if (this._mode === 'off') return;
     this._tooltip.refresh();
     write(this._fps, frame.fps === null ? '—' : formatInt(frame.fps), isAlert(frame.fps, thresholds.fps));
@@ -426,11 +418,12 @@ export class Overlay {
   }
 
   /**
-   * Arranges the overlay for its size and mode, animating any change of arrangement:
-   * - inline: counters and readouts bottom-left, the mode's graphs beside them;
-   * - stacked: the graphs on their own row below the readouts;
-   * - in Graph mode, when even the stacked row is too narrow, the frame, CPU and GPU graphs
-   *   merge into one graph whose red, green and blue channels add up like light.
+   * Arranges the overlay for its size and mode, animating any change of arrangement. A custom
+   * mode's content always packs into the top-left column under the readouts. The frame, CPU and
+   * GPU graphs of Graph mode go:
+   * - inline: bottom-centre, between the counters and the plates;
+   * - stacked: on their own row under the readouts;
+   * - compact: still all three in that row, each narrower, with a short label above and no scale.
    * Call after the overlay is resized.
    */
   public layout(prior: Snapshot | null = null): void {
@@ -512,7 +505,7 @@ export class Overlay {
    * panels of every mode (built-in and custom), so a component added later animates like the rest.
    */
   private animated(): HTMLElement[] {
-    const elements: HTMLElement[] = [this._band, this._heap.element, this._counters, this._backend];
+    const elements: HTMLElement[] = [this._band, this._heap.element, this._counters, this._backend, this._rows];
     for (let i = 0, l = this._toggles.length; i < l; i++) elements.push(this._toggles[i].element);
     for (let i = 0, l = this._slots.length; i < l; i++) {
       if (this._slots[i].metric.place === 'top') elements.push(this._slots[i].element);
@@ -550,7 +543,7 @@ export class Overlay {
     const p = this._panels;
     let panels: Panel[] = [];
     if (this._mode === 'off') return panels;
-    if (shows(this._mode).graphs) panels = this._merged ? [p.time] : [p.frame, p.cpu, p.gpu];
+    if (shows(this._mode).graphs) panels = [p.frame, p.cpu, p.gpu];
     const content = this._content.get(this._mode);
     if (content === undefined) return panels;
     panels = panels.concat(content.graphs);
@@ -573,47 +566,91 @@ export class Overlay {
     }
   }
 
-  /** Tries inline, then stacked; Graph merges its graphs only when stacked does not fit. */
+  /** Tries inline, then stacked, then compact; custom content always packs top-left. */
   private arrange(width: number): string {
     if (this._mode === 'off') return 'off';
-    this._merged = false;
     this.setFolded(false);
     this.resetLengths();
-    this.placeDistribution(width);
+    this._strip.classList.remove('tez-compact');
+    this.root.classList.remove('tez-stacked', 'tez-tight');
     this.placeHistogram(width);
     this.showPanels();
-    this._strip.classList.remove('tez-column');
-    this.root.classList.remove('tez-stacked', 'tez-tight');
     const space = this.spacing();
+    const room = width - space.edges;
+    this.fitCustom(room);
     // The plate row must fit on its own: otherwise the toggles move into the mode menu.
-    if (this._plates.offsetWidth > width - space.edges) this.setFolded(true);
-    this.fitSide();
+    if (this._plates.offsetWidth > room) this.setFolded(true);
+    // Counters and plates side by side, or the plates above the counters when they do not fit.
+    const tight = this._grid.offsetWidth + space.column + this._plates.offsetWidth > room;
+    const arrangement = this.arrangeStrip(room, space.column, tight);
+    this.fitLeft();
+    return arrangement;
+  }
+
+  private arrangeStrip(room: number, column: number, tight: boolean): string {
+    if (this._strip.childElementCount === 0) {
+      if (tight) this.root.classList.add('tez-stacked', 'tez-tight');
+      return `${this._mode}-plain${tight ? '-tight' : ''}`;
+    }
+
     // Inline: the strip is centred between two equal columns, as wide as the wider of the
     // counters (left) and the backend + mode plates (right), with a column gap on each side.
     const side = Math.max(this._grid.offsetWidth, this._plates.offsetWidth);
-    if (this._strip.offsetWidth <= width - space.edges - (side + space.column) * 2) return `${this._mode}-inline`;
-    // Stacked rows leave no room on the right edge: a vertical distribution joins the strip.
-    this.sideToStrip();
+    if (this._strip.offsetWidth <= room - (side + column) * 2) return `${this._mode}-inline`;
     this.root.classList.add('tez-stacked');
-    this.root.classList.toggle('tez-tight', this._grid.offsetWidth + space.column + this._plates.offsetWidth > width - space.edges);
-    // Stacked: the strip has its own row at the top, under the readouts, edge to edge.
-    const room = width - space.edges;
+    this.root.classList.toggle('tez-tight', tight);
     if (this._strip.offsetWidth <= room) return `${this._mode}-stacked`;
-    if (shows(this._mode).graphs) {
-      // Merge only now: the three time graphs become one RGB graph, as wide as the row and taller
-      // on narrow overlays, so every column and the lane under it read well on a phone.
-      this._merged = true;
-      this._timeGraph.setHeight(width < 640 ? NARROW_HEIGHT : HEIGHT);
-      this.showPanels();
-      const time = this._panels.time;
-      const extra = time.element.offsetWidth - (time.length?.() ?? 0);
-      time.resize?.(room - extra);
-      if (this._strip.offsetWidth <= room) return `${this._mode}-merged`;
-    }
+    // Compact: the three graphs keep sharing one row, narrower, labels above, no scale column.
+    this._strip.classList.add('tez-compact');
+    this.fitCompact(room);
+    return `${this._mode}-compact`;
+  }
 
-    this._strip.classList.add('tez-column');
-    this.fitColumn(room);
-    return `${this._mode}-column`;
+  /**
+   * The left column never pushes the bottom row off screen: taller than the room above it, it
+   * wraps into a second column.
+   */
+  private fitLeft(): void {
+    this._left.style.maxHeight = '';
+    const style = getComputedStyle(this.root);
+    const gap = px(style.rowGap);
+    const stacked = this.root.classList.contains('tez-stacked');
+    const counters = this._counters.hidden === true ? 0 : this._counters.offsetHeight;
+    const bottom = this.root.classList.contains('tez-tight')
+      ? counters + gap + this._plates.offsetHeight
+      : Math.max(counters, this._plates.offsetHeight, stacked ? 0 : this._strip.offsetHeight);
+    const strip = stacked && this._strip.childElementCount > 0 ? this._strip.offsetHeight + gap : 0;
+    const room = this.root.clientHeight - px(style.paddingTop) - px(style.paddingBottom) - bottom - gap - strip;
+    if (this._left.offsetHeight > room) this._left.style.maxHeight = `${Math.max(0, Math.floor(room))}px`;
+  }
+
+  /** Compact strip: every graph gets an equal share of the row. */
+  private fitCompact(room: number): void {
+    const visible = this.visiblePanels();
+    const inStrip: Panel[] = [];
+    for (let i = 0, l = visible.length; i < l; i++) if (visible[i].element.parentElement === this._strip) inStrip.push(visible[i]);
+    const gap = px(getComputedStyle(this._strip).columnGap);
+    const share = Math.floor((room - gap * (inStrip.length - 1)) / inStrip.length);
+    for (let i = 0, l = inStrip.length; i < l; i++) {
+      const item = inStrip[i];
+      if (item.resize === undefined || item.length === undefined) continue;
+      const extra = item.element.offsetWidth - item.length();
+      item.resize(Math.max(MIN_GRAPH, share - extra));
+    }
+  }
+
+  /** Custom graphs and the distribution never overflow the left column. */
+  private fitCustom(room: number): void {
+    const content = this._content.get(this._mode);
+    if (content === undefined) return;
+    const panels = content.distribution === null ? content.graphs : [...content.graphs, content.distribution];
+    for (let i = 0, l = panels.length; i < l; i++) {
+      const item = panels[i];
+      if (item.element.offsetWidth <= room || item.length === undefined) continue;
+      const extra = item.element.offsetWidth - item.length();
+      if (item.resize !== undefined) item.resize(Math.max(MIN_GRAPH, room - extra));
+      else item.orient?.(false, Math.max(MIN_GRAPH, room - extra));
+    }
   }
 
   /** Edge padding (left + right) and the grid column gap, read from the CSS spacing scale. */
@@ -628,35 +665,34 @@ export class Overlay {
   /** Restores the default graph lengths before a new arrangement is measured. */
   private resetLengths(): void {
     const panels = Object.values(this._panels);
-    for (let i = 0, l = panels.length; i < l; i++) panels[i].resize?.(panels[i] === this._panels.time ? MERGED : GRAPH);
+    for (let i = 0, l = panels.length; i < l; i++) panels[i].resize?.(GRAPH);
     const contents = Array.from(this._content.values());
     for (let c = 0, cl = contents.length; c < cl; c++) {
       for (let i = 0, l = contents[c].graphs.length; i < l; i++) contents[c].graphs[i].resize?.(GRAPH);
+      contents[c].distribution?.orient?.(false, GRAPH);
     }
   }
 
-  /** Column: shrink graphs that are still wider than the room beside the plates (never below 96px). */
-  private fitColumn(room: number): void {
-    const visible = this.visiblePanels();
-    for (let i = 0, l = visible.length; i < l; i++) {
-      const item = visible[i];
-      if (item.resize === undefined || item.length === undefined) continue;
-      const extra = item.element.offsetWidth - item.length();
-      if (item.element.offsetWidth > room) item.resize(Math.max(96, room - extra));
-    }
-  }
-
+  /** Built-in graphs into the strip; a custom mode's graphs and distribution into the left column. */
   private showPanels(): void {
-    const visible = this.visiblePanels();
-    const distribution = this._content.get(this._mode)?.distribution ?? null;
-    const histogram = this.histogram();
-    const elements: HTMLElement[] = [];
-    for (let i = 0, l = visible.length; i < l; i++) {
-      if (visible[i] === histogram) continue;
-      if (!(this._distributionOnSide && visible[i] === distribution)) elements.push(visible[i].element);
+    const builtin = shows(this._mode).graphs ? [this._panels.frame, this._panels.cpu, this._panels.gpu] : [];
+    const strip: HTMLElement[] = [];
+    for (let i = 0, l = builtin.length; i < l; i++) strip.push(builtin[i].element);
+    const content = this._content.get(this._mode);
+    const custom: HTMLElement[] = [];
+    if (content !== undefined) {
+      for (let i = 0, l = content.graphs.length; i < l; i++) custom.push(content.graphs[i].element);
+      if (content.distribution !== null) custom.push(content.distribution.element);
     }
 
-    this._strip.replaceChildren(...elements);
+    // Extensions of the Graph mode join its strip; a custom mode's content packs top-left.
+    if (shows(this._mode).graphs) {
+      this._strip.replaceChildren(...strip, ...custom);
+      this._custom.replaceChildren();
+    } else {
+      this._strip.replaceChildren();
+      this._custom.replaceChildren(...custom);
+    }
   }
 
   /** The current mode's large histogram, if any. */
@@ -679,72 +715,15 @@ export class Overlay {
     if (histogram.element.offsetWidth > room) histogram.setWidth(room - extra);
   }
 
-  /**
-   * A mode's distribution goes vertical on the right edge when the overlay is large enough
-   * (bar at most 35% of the height, 260px); otherwise it joins the bottom strip, horizontal.
-   */
-  private placeDistribution(width: number): void {
-    const distribution = this._content.get(this._mode)?.distribution ?? null;
-    const height = this.root.clientHeight;
-    this._distributionOnSide = distribution !== null && width >= 720 && height >= 420;
-    if (distribution === null) {
-      this._side.replaceChildren();
-      return;
-    }
-
-    if (this._distributionOnSide) {
-      distribution.orient?.(true, Math.round(Math.min(260, Math.max(120, height * 0.35))));
-      this._side.replaceChildren(distribution.element);
-    } else {
-      distribution.orient?.(false, 132);
-      this._side.replaceChildren();
-    }
-  }
-
-  /**
-   * A vertical distribution sits in the middle row, between the top readouts and the bottom row:
-   * when it is taller than that row it gets shorter, and below 120px it goes horizontal instead.
-   */
-  private fitSide(): void {
-    const distribution = this._content.get(this._mode)?.distribution ?? null;
-    if (!this._distributionOnSide || distribution === null) return;
-    const style = getComputedStyle(this.root);
-    // Inline grid: 'band . rows' / 'hist . side' / 'counters strip backend'.
-    const top = Math.max(this._band.offsetHeight, this._rows.offsetHeight);
-    const bottom = Math.max(this._counters.offsetHeight, this._plates.offsetHeight, this._strip.offsetHeight);
-    const room = this.root.clientHeight - px(style.paddingTop) - px(style.paddingBottom) - px(style.rowGap) * 2 - top - bottom;
-    const over = distribution.element.offsetHeight - room;
-    if (over <= 0) return;
-    const bar = distribution.length?.() ?? 0;
-    if (bar - over >= 120) {
-      distribution.orient?.(true, Math.floor(bar - over));
-      return;
-    }
-
-    this.sideToStrip();
-  }
-
-  /** Moves a vertical distribution from the right edge into the strip, horizontal. */
-  private sideToStrip(): void {
-    const distribution = this._content.get(this._mode)?.distribution ?? null;
-    if (!this._distributionOnSide || distribution === null) return;
-    this._distributionOnSide = false;
-    distribution.orient?.(false, 132);
-    this._side.replaceChildren();
-    this.showPanels();
-  }
-
   private buildPanels(): Record<PanelName, Panel> {
     const s = this._samples;
     const b = this._budget;
-    const merged = el('span', 'tez-stack');
-    merged.append(el('span', 'tez-frame', 'FRM'), el('span', 'tez-gpu', 'GPU'), el('span', 'tez-cpu', 'CPU'));
+    // No tooltips on these graphs: the colours and the readouts above say it all.
     return {
       frame: panel(new TimeGraph(b, [{ samples: s.frame }], { width: GRAPH, height: HEIGHT, vertical: false, autoScale: false, events: s.compiles, label: '' }),
-        stack('FRM', 'MS'), 'MS', ms, s.frame, 'Frame time: white on time, yellow one refresh missed, red two or more.', frameTip(b, s.frame)),
-      cpu: panel(graph([{ samples: s.cpu, color: 'cpu' }], b, true, [s.gpu]), stack('MS', 'CPU', 'tez-cpu'), 'MS', ms, s.cpu, 'CPU time per frame.', seriesTip('cpu', b, s.cpu)),
-      gpu: panel(graph([{ samples: s.gpu, color: 'gpu' }], b, true, [s.cpu]), stack('MS', 'GPU', 'tez-gpu'), 'MS', ms, s.gpu, 'GPU time per frame.', seriesTip('gpu', b, s.gpu)),
-      time: panel(this._timeGraph, merged, 'MS', ms, s.frame, 'Frame, GPU and CPU time, each on its own scale.', mergedTip(b, s))
+        graphLabel('FRM'), 'MS', ms, s.frame, 'Frame time per column, white on time, yellow and red when late.'),
+      cpu: panel(graph([{ samples: s.cpu, color: 'cpu' }], b, true, [s.gpu]), graphLabel('CPU', 'tez-cpu'), 'MS', ms, s.cpu, 'CPU time per frame.'),
+      gpu: panel(graph([{ samples: s.gpu, color: 'gpu' }], b, true, [s.cpu]), graphLabel('GPU', 'tez-gpu'), 'MS', ms, s.gpu, 'GPU time per frame.')
     };
   }
 
@@ -788,93 +767,14 @@ function graph(series: readonly Series[], budget: number, autoScale: boolean, sc
   return new TimeGraph(budget, series, { width: length, height: HEIGHT, vertical: false, autoScale, scaleWith, label: '' });
 }
 
-/** Built-in graph panel: the shared panel shape, with the arguments in the order the table above reads. */
-function panel(timeGraph: TimeGraph, label: HTMLElement, unit: string, format: (v: number | null) => string, data: Samples, tip: string, rich?: TipContent): Panel {
-  return graphPanel(timeGraph, label, unit, format, data, tip, rich);
+/** Built-in graph panel: no tooltip, the description goes to assistive technology only. */
+function panel(timeGraph: TimeGraph, label: HTMLElement, unit: string, format: (v: number | null) => string, data: Samples, description: string): Panel {
+  return graphPanel(timeGraph, label, unit, format, data, description, undefined, false);
 }
 
-type LastValues = () => { frame: FrameValues; thresholds: FrameThresholds };
-const orDash = (value: number | null | undefined, format: (v: number) => string): string => (value === null || value === undefined ? '—' : format(value));
-
-function fpsTip(budget: number, last: LastValues): TipContent {
-  return {
-    title: 'Frames per second',
-    text: 'Average over the last quarter second.',
-    legend: [{ mark: 'alert', text: 'Under 90% of the target' }],
-    values: () => {
-      const { frame } = last();
-      return [['Now', orDash(frame.fps, formatInt)], ['Target', formatInt(1000 / budget)]];
-    }
-  };
-}
-
-function timeTip(kind: 'cpu' | 'gpu', budget: number, last: LastValues): TipContent {
-  const cpu = kind === 'cpu';
-  return {
-    title: cpu ? 'CPU time' : 'GPU time',
-    text: cpu ? 'JavaScript per frame, begin() to end().' : 'GPU per frame, from timer queries.',
-    legend: [
-      { mark: 'ink', text: 'Dial: share of the frame budget' },
-      ...(cpu ? [] : [{ mark: 'ink' as const, text: 'Dashed: no GPU timer here' }]),
-      { mark: 'alert', text: 'Over budget' }
-    ],
-    values: () => {
-      const value = cpu ? last().frame.cpu : last().frame.gpu;
-      return [['Now', orDash(value, (v) => `${formatMs(v)} ms`)], ['Budget', `${formatMs(budget)} ms`]];
-    }
-  };
-}
-
-/** Recent range of a series as tooltip rows. */
-function rangeRows(samples: Samples, budget: number): (readonly [string, string])[] {
-  return [['Max', orDash(samples.max(128), (v) => `${formatMs(v)} ms`)], ['Budget', `${formatMs(budget)} ms`]];
-}
-
-function frameTip(budget: number, frame: Samples): TipContent {
-  return {
-    title: 'Frame time',
-    text: 'Slowest frame of each column, newest on the right.',
-    legend: [
-      { mark: 'ink', text: 'On time' },
-      { mark: 'alert', text: 'Missed one refresh' },
-      { mark: 'clip', text: 'Missed two or more' },
-      { mark: 'budget-tick', text: 'Budget' },
-      { mark: 'event-tick', text: 'Shader compiled' },
-      { mark: 'flag-tick', text: 'stats.event()' }
-    ],
-    values: () => rangeRows(frame, budget)
-  };
-}
-
-function seriesTip(kind: 'cpu' | 'gpu', budget: number, samples: Samples): TipContent {
-  return {
-    title: kind === 'cpu' ? 'CPU time' : 'GPU time',
-    text: 'Per frame. CPU and GPU share one scale.',
-    legend: [{ mark: kind, text: kind === 'cpu' ? 'CPU' : 'GPU' }, { mark: 'budget-tick', text: 'Budget' }],
-    values: () => rangeRows(samples, budget)
-  };
-}
-
-function mergedTip(budget: number, s: { frame: Samples; cpu: Samples; gpu: Samples }): TipContent {
-  return {
-    title: 'Frame · GPU · CPU',
-    text: 'Each on its own scale: when they move, not how much.',
-    legend: [
-      { mark: 'frame', text: 'Frame' },
-      { mark: 'gpu', text: 'GPU' },
-      { mark: 'cpu', text: 'CPU' },
-      { mark: 'lane', text: 'Late frames' },
-      { mark: 'event-tick', text: 'Shader compiled' },
-      { mark: 'flag-tick', text: 'stats.event()' }
-    ],
-    values: () => [['Frame max', orDash(s.frame.max(128), (v) => `${formatMs(v)} ms`)], ['Budget', `${formatMs(budget)} ms`]]
-  };
-}
-
-function heapTip(last: LastValues): TipContent {
-  return {
-    title: 'JS heap',
-    text: 'MB used by JavaScript. Chromium only.',
-    values: () => [['Now', orDash(last().frame.heap, (v) => `${formatInt(v)} MB`)]]
-  };
+/** A graph label: the unit on top, the name under it (the only line kept in compact graphs). */
+function graphLabel(name: string, color = ''): HTMLSpanElement {
+  const node = el('span', 'tez-stack');
+  node.append(el('span', 'tez-graph-unit', 'MS'), el('span', `tez-graph-name ${color}`.trim(), name));
+  return node;
 }
