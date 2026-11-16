@@ -30,7 +30,7 @@ Cumulative: each built-in mode adds to the previous one.
 | --- | --- | --- |
 | Simple | `STD` | Frame rate, CPU time, GPU time |
 | Performance | `PERF` | Simple, plus the JS heap and the counters bottom-left (draw calls, triangles, points, lines, geometries, textures, programs, and objects with a `scene`) |
-| Graph | `GRPH` | Performance, plus the frame / CPU / GPU graphs, P95 / PEAK / DROP, `mark()` segments and REC |
+| Graph | `GRPH` | Performance, plus the frame / CPU / GPU graphs |
 | Off | `OFF` | The mode plate only |
 
 Custom modes keep the Performance readouts and add their own graphs, rows, histogram,
@@ -43,7 +43,7 @@ distribution and toggles. Image and LOD are custom modes in `examples/`, not par
 | Readouts, counters, time graphs, frame pacing rows | core |
 | Objects counter (with `scene`) | core |
 | Timeline events (`stats.event()`) | core |
-| Session recording and report (`startRecording()`, REC) | core |
+| Session recording and report (`startRecording()`) | core |
 | Pressure signal for adaptive quality (`onPressure`) | core |
 | Snapshot as JSON and the global hook | core |
 | Custom modes, metrics, graphs, histograms, distributions, toggles | core |
@@ -52,8 +52,10 @@ distribution and toggles. Image and LOD are custom modes in `examples/`, not par
 
 ### Responsive behaviour
 
-- Inline, stacked, then merged graphs as the overlay narrows; a criticality lane under the
-  merged graph.
+- Custom content packs into one column top-left, wrapping into a second column on short screens.
+- The time graphs go inline, then stacked under the readouts, then compact (three in one row,
+  short names, no scale) as the overlay narrows. They never merge.
+- Tooltips are atomic: a title and half a line. The built-in graphs have none.
 - Overlays under 480 px tall use the small type.
 - Edges follow the safe area (`env(safe-area-inset-*)`, with `viewport-fit=cover`).
 - On touch screens every plate takes taps from a 32 px area.
@@ -68,6 +70,9 @@ Decided after the owner's review: the overlay measures and shows, it does not ad
 - The Info mode: technical pages, the canvas thumbnail, the camera page.
 - The Mesh and Memory modes and their graphs.
 - The built-in Image mode (now an example) and its waveform and vectorscope.
+- The top-right rows (P95, PEAK, DROP, `mark()` segments) and the REC plate: pacing and
+  segments are in the snapshot, recording is an API.
+- The merged RGB graph and its lane.
 
 ## Planned
 

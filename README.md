@@ -75,7 +75,7 @@ or a right click, opens the list. The modes build on each other.
 | --- | --- | --- |
 | Simple | `STD` | Frame rate, CPU time and GPU time, with budget dials |
 | Performance | `PERF` | The JS heap and the renderer counters, bottom-left |
-| Graph | `GRPH` | Frame, CPU and GPU time graphs; P95, PEAK and DROP; `mark()` segments; REC |
+| Graph | `GRPH` | Frame, CPU and GPU time graphs |
 | Off | `OFF` | Nothing but the mode plate |
 
 ![Simple mode: frame rate, CPU and GPU time](docs/images/simple.png)
@@ -83,10 +83,11 @@ or a right click, opens the list. The modes build on each other.
 
 The counters: draw calls, triangles, points, lines, geometries, textures, shader programs and,
 with a `scene`, the objects in it. Draw calls and triangles turn yellow past the budget of the
-device profile (below). Every element has a tooltip with a legend; on touch, tap a readout or
+device profile (below). Readouts and counters have a one-line tooltip; on touch, tap one or
 long-press anything.
 
-Your own modes join the cycle after Graph, before Off. The demo has two, built with the public
+Your own modes join the cycle after Graph, before Off. Their rows, histogram, graphs and
+distribution pack into one column top-left, under the readouts. The demo has two, built with the public
 API: **Image** (an RGB histogram of the render, zebra on clipped highlights, framing guides, the
 colour under the pointer) and **LOD** (objects per level, switches per second, triangles saved).
 They live in `examples/`, not in the package.
@@ -97,11 +98,11 @@ They live in `examples/`, not in the package.
 
 One column per few frames, each keeping its slowest: white on time, yellow when it missed one
 screen refresh, red when it missed two or more. A tick above a column is a shader compiled in
-that frame; a flag is an event your app marked. On narrow screens the three graphs merge into
-one, with a lane underneath that keeps every late frame visible.
+that frame; a flag is an event your app marked. On phones the three graphs stay, side by side,
+narrower, with a short name above each. The graphs have no tooltips: the colours say it.
 
 ```ts
-stats.mark('physics');        // CPU segments, shown as rows that add up to the CPU time
+stats.mark('physics');        // CPU segments, in snapshot().segments; they add up to the CPU time
 stats.event('level-load');    // a flag on the graph: what was the app doing when it hitched?
 ```
 
@@ -114,7 +115,7 @@ const report = stats.stopRecording();
 // report.fps.low1, report.frame.p99, report.dropped, report.calls.max, report.events …
 ```
 
-The `REC` plate in Graph mode does the same. A report is what you compare before and after a
+A report is what you compare before and after a
 change, attach to a bug, or assert in a test: renderer counters are deterministic, so
 `expect(report.calls.max).toBeLessThan(300)` works in CI. Timings in headless browsers do not.
 
@@ -206,7 +207,7 @@ stats.defineMode({
 | `histogram: { channels, domain }` | A large histogram, up to three channels, with 1 px columns and clipping marks |
 | `distribution: { read }` | A bar split by share, vertical on wide screens |
 | `controls: [{ label, onChange }]` | A toggle plate next to the mode plate, folded into its menu when there is no room |
-| `tip: { title, text, legend, values, advice }` | A rich tooltip with a legend and live values |
+| `tip: { title, text }` | A tooltip; `legend` and live `values` are there when a plugin needs them |
 
 What the overlay guarantees in return: an invalid definition is skipped with one console warning;
 a `read` or `format` that throws shows "—" and is switched off; nothing you register can throw
@@ -227,7 +228,7 @@ reference is in [docs/extending.md](docs/extending.md).
 | `interval` | `250` | Text refresh period in ms |
 | `graphStep` | `3` | Frames per graph column; each column keeps its slowest frame |
 | `interactive` | `true` | Tooltips and clickable plates; `false` makes the overlay passive |
-| `exclude` | `[]` | Built-in ids to leave out: counters (`'points'`, `'objects'`…), rows (`'p95'`…), `'rec'` |
+| `exclude` | `[]` | Built-in counters to leave out, e.g. `['points', 'lines', 'objects']` |
 | `metrics` | `[]` | Extra metrics |
 | `onPressure` | — | Called with `'high'`, `'low'` or `'ok'`, for adaptive quality |
 | `onReport` | — | Called with the report of every finished recording |

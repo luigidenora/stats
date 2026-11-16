@@ -158,7 +158,7 @@ The three channels are chosen to add up like light (yellow, cyan, magenta, white
 ### Named Rules
 **The Yellow Means Look Rule.** Yellow is reserved for alerts and for the current choice. It never decorates, never labels a series, and never fills an area except the checked menu row.
 
-**The Colour Only With Its Graph Rule.** The labels of a readout carry the frame, CPU and GPU series colours only while the Graph mode graphs are on screen. In every other mode they go back to ink. Glyphs and dials always stay ink, even inside an alert or a coloured label.
+**The Colour Only With Its Graph Rule.** The CPU and GPU readout labels carry their series colours only while the Graph mode graphs are on screen. The FPS label stays ink, like the on-time frame columns. In every other mode they go back to ink. Glyphs and dials always stay ink, even inside an alert or a coloured label.
 
 **The Alerts Change Colour Only Rule.** An alert changes the colour of a value and nothing else: no weight change, no size change, no badge. The layout never moves.
 
@@ -191,7 +191,8 @@ On overlays narrower than 640px (container query), the scale steps down: value 2
 The overlay is a fixed, full-viewport CSS grid of named areas, positioned over the canvas. It takes the pointer only on its interactive elements.
 
 - **Default arrangement** (three columns `1fr auto 1fr`, three rows `auto 1fr auto`): readout band top-left, right-edge rows top-right, large histogram under the band, distribution mid-right, counter grid bottom-left, mode graphs bottom-centre, backend plate plus toggles plus the mode plate bottom-right. The centre cell is always empty.
-- **Stacked** (when the strip does not fit between the corners): the graphs move up under the readouts, and counters and plates share the bottom row. **Tight**: the plates move above the counters. In Graph mode, if even the stacked strip is too wide, the frame, CPU and GPU graphs merge into one graph as wide as the row. In a stacked arrangement a vertical distribution joins the strip.
+- **Left column**: the readout band, then a custom mode's rows, histogram, graphs and distribution, packed with the row gap. Taller than the room above the bottom row, it wraps into a second column.
+- **Stacked** (when the strip does not fit between the corners): the graphs move up under the readouts, and counters and plates share the bottom row. **Tight**: the plates move above the counters. **Compact**: when even the stacked row is too narrow, the three graphs share it, each with its name above and no scale column. They never merge.
 - **Side distribution**: the vertical distribution bar sits on the right edge only when the overlay is at least 720px wide and 420px tall, and gets shorter to fit its row. Below 120px it joins the bottom strip horizontally.
 - **Short overlays** (under 480px tall): the narrow type sizes, whatever the width.
 - **Safe area**: the edge padding is the larger of the spacing token and `env(safe-area-inset-*)`.
@@ -252,13 +253,13 @@ Instant, styled like a plate: plate-grey, 1px ink border, 4px 8px padding, at mo
 - **Band** (top-left, one row): FPS, CPU ms, GPU ms, heap MB. Each is a stacked label beside a 26px value, with 24px between readouts.
 - **Counter grid** (bottom-left): four columns of glyph and value pairs at 20px.
 - An unavailable value shows an em dash, never a fabricated zero.
-- **Pacing rows** (top-right, Graph only): P95 and PEAK frame time in ms and DROP (refreshes missed) over the last 240 frames, by the frame graph's 1.25× / 2.25× rule. Below them, one row per `stats.mark()` CPU segment, its plate the first four letters of the name.
+- **(Removed) pacing rows**: P95 and PEAK frame time in ms and DROP (refreshes missed) over the last 240 frames, by the frame graph's 1.25× / 2.25× rule. Below them, one row per `stats.mark()` CPU segment, its plate the first four letters of the name.
 
 ### Time Graph
 A scrolling graph with one 1px track per sample, inside a 1px ink box.
 - Horizontal graphs run newest on the right with values growing up. Vertical graphs scroll upwards. Mirrored graphs grow both ways from a dotted zero line.
 - The budget is marked by 3px ticks outside the box on both sides, so the plot stays clean.
-- Events sit on the free top edge: a 1×3px ink tick above the column of a frame that created a new shader program (frame graph and merged graph). Ink, not yellow: yellow already means a missed refresh in the same graph.
+- Events sit on the free top edge: a 1×3px ink tick above the column of a frame that created a new shader program (frame graph). Ink, not yellow: yellow already means a missed refresh in the same graph.
 - An uncoloured series is coloured per sample: ink on time, signal yellow past 1.25× budget, clip red past 2.25×. Coloured series (CPU, GPU) composite additively.
 - One 1px contour surrounds the union of all series, so overlaps blend with no dark seam. The axis auto-scales to round steps (1, 2, 2.5, 5 × 10ⁿ), capped at twice the budget.
 

@@ -43,14 +43,14 @@ renderer.render(scene, camera);
 stats.end();
 ```
 
-Each segment becomes a row in Graph mode (plate: the first 4 letters, upper case). At most 4
+Each segment's average CPU ms per frame is in `stats.snapshot().segments`. At most 4
 segments; marks outside `begin()` / `end()` are ignored with one warning. The CPU readout stays the
 whole `begin()` → `end()` time, and the segments add up to it.
 
-## Built-in pacing and shader events
+## Pacing and shader events
 
-Graph mode also shows P95 and PEAK (worst) frame time and DROP, the refreshes missed over the last 240
-frames (ids `'p95'`, `'worst'`, `'dropped'`; turn them off with `exclude`). A tick above the frame
+Frame pacing (P95, worst frame, refreshes missed, over the last 240 frames) is in
+`stats.snapshot().pacing` and in recording reports; it is not drawn as rows. A tick above the frame
 graph marks a frame that created a new shader program, a common cause of a single spike. It reads
 the program count, so it fires on creation; with parallel or async compilation the stall can land
 a few frames later.
@@ -82,13 +82,13 @@ take the channel colours.
 ## Built-in modes
 
 The built-in modes build on each other; custom modes keep the Performance readouts and add their
-own content.
+own content, packed in one column top-left under the readouts.
 
 | Mode | Shows |
 |---|---|
 | Simple | frame rate, CPU and GPU time |
 | Performance | Simple plus the JS heap and the counters (and the objects counter with a `scene`) |
-| Graph | Performance plus frame, CPU, GPU time graphs (merged into one RGB graph when space runs out), P95, PEAK and DROP rows, `stats.mark()` segments and REC |
+| Graph | Performance plus frame, CPU, GPU time graphs (compact, three in a row, on phones) |
 | Off | only the mode plate |
 
 `extendMode('graph', …)` adds to the graphs (at most four per mode, built-in ones included);
@@ -120,7 +120,7 @@ free silhouette with a dark contour, `'memory'` puts it on a plate. Two-directio
 ```ts
 stats.event('wave-start');            // a flag on the graphs, and a named entry in the recording
 stats.startRecording();
-const report = stats.stopRecording(); // or the REC plate; onReport receives every report
+const report = stats.stopRecording(); // onReport receives every report
 const snapshot = stats.snapshot();    // everything as JSON (see agents.md)
 ```
 
