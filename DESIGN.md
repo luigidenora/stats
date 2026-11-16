@@ -253,7 +253,6 @@ Instant, styled like a plate: plate-grey, 1px ink border, 4px 8px padding, at mo
 - **Band** (top-left, one row): FPS, CPU ms, GPU ms, heap MB. Each is a stacked label beside a 26px value, with 24px between readouts.
 - **Counter grid** (bottom-left): four columns of glyph and value pairs at 20px.
 - An unavailable value shows an em dash, never a fabricated zero.
-- **(Removed) pacing rows**: P95 and PEAK frame time in ms and DROP (refreshes missed) over the last 240 frames, by the frame graph's 1.25× / 2.25× rule. Below them, one row per `stats.mark()` CPU segment, its plate the first four letters of the name.
 
 ### Time Graph
 A scrolling graph with one 1px track per sample, inside a 1px ink box.
