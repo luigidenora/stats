@@ -91,6 +91,9 @@ const CSS = `
   touch-action: manipulation;
 }
 /* Instant tooltip, styled like a plate. */
+/* Surfaces (tooltip, menu, plates) are 96% opaque on purpose: a fully opaque box over a WebGL
+   canvas lets some compositors skip repainting the canvas under it, so a box that moves away
+   leaves a black hole behind. 4% of the image through is invisible on a dark plate. */
 .tez-tip {
   position: absolute;
   top: 0;
@@ -99,7 +102,7 @@ const CSS = `
   max-width: 280px;
   padding: var(--tez-space-1) var(--tez-space-2);
   border: 1px solid var(--tez-ink);
-  background: var(--tez-plate);
+  background: color-mix(in srgb, var(--tez-plate) 96%, transparent);
   color: var(--tez-ink);
   font-size: 13px;
   font-weight: 500;
@@ -243,7 +246,7 @@ const CSS = `
   display: grid;
   min-width: 200px;
   border: 1px solid var(--tez-ink);
-  background: var(--tez-ground);
+  background: color-mix(in srgb, var(--tez-ground) 96%, transparent);
   -webkit-text-stroke: 0;
   pointer-events: auto;
 }
@@ -327,7 +330,7 @@ const CSS = `
   height: var(--tez-plate-h);
   padding: 0 4px;
   border: 1px solid var(--tez-ink);
-  background: var(--tez-plate);
+  background: color-mix(in srgb, var(--tez-plate) 96%, transparent);
   color: var(--tez-ink);
   font-size: calc(var(--tez-plate-cap) / 0.7);
   font-weight: 600;

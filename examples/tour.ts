@@ -1,8 +1,8 @@
 /**
  * A guided tour of the overlay, for the demo (`?tour`, or `?tour=manual` to step by hand).
  *
- * A focus frame, four yellow corners like a camera's autofocus box, moves onto each part of the
- * overlay while a caption in plate style says what it is. The events it shows are real: a
+ * A spotlight darkens everything but one part of the overlay, framed by four yellow corners like a
+ * camera's autofocus box; a caption in plate style sits beside it, follows it, and says what it is. The events it shows are real: a
  * deliberate hitch, a shader compile, a recording. Not part of the package.
  *
  * Keys: → or Space next, ← back, Esc leaves the tour.
@@ -32,6 +32,10 @@ interface Step {
 
 const FLIP_MS = 300;
 const PAD = 6;
+/** Space between the spotlight and the caption, and between the caption and the screen edges. */
+const GAP = 12;
+const EDGE = 16;
+const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 /** The union of the visible boxes of everything matching the selectors, inside the overlay. */
 function boxOf(root: HTMLElement, ...selectors: string[]): () => DOMRect | null {
@@ -75,7 +79,13 @@ function hitch(ms: number): void {
 
 const STYLE = `
 .tour { position: fixed; inset: 0; z-index: 10001; pointer-events: none; font-family: 'Barlow Condensed', 'Roboto Condensed', 'Arial Narrow', sans-serif; color: var(--tez-ink); }
-.tour-frame { position: fixed; transition: left 280ms cubic-bezier(0.22, 1, 0.36, 1), top 280ms cubic-bezier(0.22, 1, 0.36, 1), width 280ms cubic-bezier(0.22, 1, 0.36, 1), height 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms; }
+/* The spotlight: a clear box whose huge shadow darkens the rest of the screen. */
+.tour-frame {
+  position: fixed; box-shadow: 0 0 0 200vmax rgb(0 0 0 / 0.66);
+  transition: left 280ms ${EASE}, top 280ms ${EASE}, width 280ms ${EASE}, height 280ms ${EASE};
+}
+.tour-frame[data-empty] .tour-corner { opacity: 0; }
+.tour-corner { transition: opacity 200ms; }
 .tour-corner { position: absolute; width: 12px; height: 12px; }
 .tour-corner::before, .tour-corner::after { content: ''; position: absolute; background: var(--tez-alert); box-shadow: 0 0 0 1px var(--tez-outline); }
 .tour-corner::before { width: 12px; height: 2px; }
@@ -85,12 +95,14 @@ const STYLE = `
 .tour-corner[data-c='bl'] { left: 0; bottom: 0; transform: scaleY(-1); }
 .tour-corner[data-c='br'] { right: 0; bottom: 0; transform: scale(-1); }
 .tour-caption {
-  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  position: fixed; left: 0; top: 0; will-change: transform;
   width: min(360px, calc(100vw - 32px)); box-sizing: border-box;
   display: grid; gap: 8px; padding: 12px 16px 0;
-  border: 1px solid var(--tez-ink); background: var(--tez-ground);
+  /* 96% opaque on purpose: a fully opaque box over a WebGL canvas lets some compositors skip
+     repainting the canvas under it, leaving a black hole where the caption was. */
+  border: 1px solid var(--tez-ink); background: rgb(12 12 11 / 0.96);
   pointer-events: auto; cursor: pointer; user-select: none;
-  transition: opacity 200ms;
+  transition: transform 280ms ${EASE};
 }
 .tour-head { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 .tour-count { color: var(--tez-alert); font-variant-numeric: tabular-nums; }
@@ -169,7 +181,7 @@ export function startTour(context: TourContext, options: { autoplay: boolean }):
       },
       seconds: 4.6
     },
-    { mode: 'lod', target: boxOf(root, '.tez-c-hist', '.tez-c-strip', '.tez-c-side'), title: 'Your own modes', text: 'Plain data in, this interface out. This LOD mode is an example in the repo.' },
+    { mode: 'lod', target: boxOf(root, '.tez-c-hist'), title: 'Your own modes', text: 'Plain data in, this interface out. This LOD mode is an example in the repo.' },
     {
       mode: 'image', target: boxOf(root, '.tez-c-hist'), title: 'Image', text: 'Another example: an RGB histogram of the render, zebra on clipped highlights.',
       enter: () => {
@@ -215,20 +227,65 @@ export function startTour(context: TourContext, options: { autoplay: boolean }):
   document.body.classList.add('tour-on');
 
   let shownAt = 0;
+  /** Spotlight box of the last frame; kept while a target is measured again after a mode change. */
+  let spot: DOMRect | null = null;
+
+  const place = (element: HTMLElement, left: number, top: number, width?: number, height?: number): void => {
+    const set = (key: 'left' | 'top' | 'width' | 'height', value: number | undefined): void => {
+      if (value === undefined) return;
+      const px = `${Math.round(value)}px`;
+      if (element.style[key] !== px) element.style[key] = px;
+    };
+
+    set('left', left);
+    set('top', top);
+    set('width', width);
+    set('height', height);
+  };
+
+  /**
+   * Beside the spotlight where there is room: below, above, right, then left; centred on the
+   * screen without a target. Always inside the screen edges.
+   */
+  const placeCaption = (box: DOMRect | null): void => {
+    const width = caption.offsetWidth;
+    const height = caption.offsetHeight;
+    const screenW = innerWidth;
+    const screenH = innerHeight;
+    const clampX = (x: number): number => Math.min(Math.max(EDGE, x), screenW - width - EDGE);
+    const clampY = (y: number): number => Math.min(Math.max(EDGE, y), screenH - height - EDGE);
+    // Moved with a transform: composited, so the canvas under its old place repaints cleanly.
+    const move = (x: number, y: number): void => {
+      const value = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
+      if (caption.style.transform !== value) caption.style.transform = value;
+    };
+
+    if (box === null) move((screenW - width) / 2, (screenH - height) / 2);
+    else if (box.bottom + GAP + height <= screenH - EDGE) move(clampX(box.left), box.bottom + GAP);
+    else if (box.top - GAP - height >= EDGE) move(clampX(box.left), box.top - GAP - height);
+    else if (box.right + GAP + width <= screenW - EDGE) move(box.right + GAP, clampY(box.top));
+    else if (box.left - GAP - width >= EDGE) move(box.left - GAP - width, clampY(box.top));
+    else move(clampX(box.left), clampY(box.bottom + GAP));
+  };
+
   const follow = (): void => {
     const step = steps[index] as Step | undefined;
-    // Wait for the mode change to finish its 280ms glide before measuring.
-    const box = step?.target !== undefined && performance.now() - shownAt > FLIP_MS ? step.target() : null;
-    if (box === null) {
-      focus.style.opacity = step?.target === undefined ? '0' : focus.style.opacity;
-    } else {
-      focus.style.opacity = '1';
-      focus.style.left = `${Math.round(box.left - PAD)}px`;
-      focus.style.top = `${Math.round(box.top - PAD)}px`;
-      focus.style.width = `${Math.round(box.width + PAD * 2)}px`;
-      focus.style.height = `${Math.round(box.height + PAD * 2)}px`;
+    if (step?.target === undefined) {
+      // No target: the whole screen dims, the spotlight closes in the middle.
+      spot = null;
+      focus.dataset['empty'] = '';
+      place(focus, innerWidth / 2, innerHeight / 2, 0, 0);
+    } else if (performance.now() - shownAt > FLIP_MS) {
+      // Measured after the mode change has finished its 280ms glide.
+      const box = step.target();
+      if (box !== null) spot = new DOMRect(box.left - PAD, box.top - PAD, box.width + PAD * 2, box.height + PAD * 2);
+      if (spot !== null) {
+        delete focus.dataset['empty'];
+        place(focus, spot.left, spot.top, spot.width, spot.height);
+      }
     }
 
+    placeCaption(spot);
     frame = requestAnimationFrame(follow);
   };
 
