@@ -233,13 +233,16 @@ export function distributionPanel(distribution: DistributionDefinition): Panel {
   element.append(stack(distribution.label[0], distribution.label[1]), plot, legend);
   let counts: readonly number[] | null = null;
   let vertical = false;
+  let barLength = 132;
 
   const name = (i: number): string => distribution.names?.[i] ?? `L${i}`;
   return {
     element,
     timing: 'refresh',
+    length: () => barLength,
     orient: (isVertical, length) => {
       vertical = isVertical;
+      barLength = length;
       element.classList.toggle('tez-dist-vertical', isVertical);
       bar.style.width = isVertical ? '' : `${length}px`;
       bar.style.height = isVertical ? `${length}px` : '';

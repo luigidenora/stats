@@ -6,7 +6,7 @@ import { play, reducedMotion, snapshot, type Snapshot } from './flip.js';
 import { formatCount, formatInt, formatMs, isAlert, type Threshold } from './format.js';
 import { createGlyphFromSpec, createPlate, GLYPHS, type GlyphSpec } from './glyphs.js';
 import { Samples, TimeGraph, type Series } from './graphs.js';
-import { findMode, ModeControl, MODES, type ModeInfo } from './modes.js';
+import { findMode, ModeControl, MODES, type MenuToggle, type ModeInfo } from './modes.js';
 import type { BackendKind } from './sampler.js';
 import { injectStyles } from './styles.js';
 import { setTip, Tooltip } from './tooltip.js';
@@ -124,6 +124,8 @@ export class Overlay {
   private readonly _content = new Map<StatsMode, Content>();
   private _mode: StatsMode;
   private _merged = false;
+  /** The plate row has no room for the toggles: they move into the mode menu. */
+  private _folded = false;
   /** Current arrangement; a change triggers the FLIP transition. */
   private _arrangement = '';
   /** Values of the last refresh, read by the live rows of the readout tooltips. */
@@ -163,7 +165,7 @@ export class Overlay {
       ? new ModeControl(this._mode, () => this._modes, (mode) => {
           this.setMode(mode);
           options.onModeChange?.(mode);
-        })
+        }, () => this.menuToggles())
       : null;
 
     this._plates.append(this._backend);
@@ -466,9 +468,42 @@ export class Overlay {
     }
 
     for (let i = 0, l = this._toggles.length; i < l; i++) {
-      const modes = this._toggles[i].definition.modes;
-      this._toggles[i].element.hidden = this._mode === 'off' || (modes !== undefined && !modes.includes(this._mode));
+      this._toggles[i].element.hidden = this._folded || !this.toggleShown(this._toggles[i]);
     }
+  }
+
+  private toggleShown(toggle: Toggle): boolean {
+    const modes = toggle.definition.modes;
+    return this._mode !== 'off' && (modes === undefined || modes.includes(this._mode));
+  }
+
+  /** The toggles of this mode as menu rows, while they are folded into the menu. */
+  private menuToggles(): MenuToggle[] {
+    const out: MenuToggle[] = [];
+    if (!this._folded) return out;
+    for (let i = 0, l = this._toggles.length; i < l; i++) {
+      const toggle = this._toggles[i];
+      if (!this.toggleShown(toggle)) continue;
+      out.push({
+        label: toggle.definition.label,
+        description: toggle.definition.description,
+        active: toggle.active,
+        set: (active) => {
+          toggle.active = active;
+        }
+      });
+    }
+
+    return out;
+  }
+
+  /** Folds the toggles into the mode menu, or brings them back next to the plate. */
+  private setFolded(folded: boolean): void {
+    if (folded === this._folded) return;
+    this._folded = folded;
+    this.root.classList.toggle('tez-folded', folded);
+    this.applyMode();
+    this._control?.refresh();
   }
 
   /**
@@ -541,6 +576,7 @@ export class Overlay {
   private arrange(width: number): string {
     if (this._mode === 'off') return 'off';
     this._merged = false;
+    this.setFolded(false);
     this.resetLengths();
     this.placeDistribution(width);
     this.placeHistogram(width);
@@ -548,10 +584,15 @@ export class Overlay {
     this._strip.classList.remove('tez-column');
     this.root.classList.remove('tez-stacked', 'tez-tight');
     const space = this.spacing();
+    // The plate row must fit on its own: otherwise the toggles move into the mode menu.
+    if (this._plates.offsetWidth > width - space.edges) this.setFolded(true);
+    this.fitSide();
     // Inline: the strip is centred between two equal columns, as wide as the wider of the
     // counters (left) and the backend + mode plates (right), with a column gap on each side.
     const side = Math.max(this._grid.offsetWidth, this._plates.offsetWidth);
     if (this._strip.offsetWidth <= width - space.edges - (side + space.column) * 2) return `${this._mode}-inline`;
+    // Stacked rows leave no room on the right edge: a vertical distribution joins the strip.
+    this.sideToStrip();
     this.root.classList.add('tez-stacked');
     this.root.classList.toggle('tez-tight', this._grid.offsetWidth + space.column + this._plates.offsetWidth > width - space.edges);
     // Stacked: the strip has its own row at the top, under the readouts, edge to edge.
@@ -578,8 +619,8 @@ export class Overlay {
   private spacing(): { edges: number; column: number } {
     const style = getComputedStyle(this.root);
     return {
-      edges: parseFloat(style.paddingLeft) + parseFloat(style.paddingRight),
-      column: parseFloat(style.columnGap)
+      edges: px(style.paddingLeft) + px(style.paddingRight),
+      column: px(style.columnGap)
     };
   }
 
@@ -659,6 +700,39 @@ export class Overlay {
     }
   }
 
+  /**
+   * A vertical distribution sits in the middle row, between the top readouts and the bottom row:
+   * when it is taller than that row it gets shorter, and below 120px it goes horizontal instead.
+   */
+  private fitSide(): void {
+    const distribution = this._content.get(this._mode)?.distribution ?? null;
+    if (!this._distributionOnSide || distribution === null) return;
+    const style = getComputedStyle(this.root);
+    // Inline grid: 'band . rows' / 'hist . side' / 'counters strip backend'.
+    const top = Math.max(this._band.offsetHeight, this._rows.offsetHeight);
+    const bottom = Math.max(this._counters.offsetHeight, this._plates.offsetHeight, this._strip.offsetHeight);
+    const room = this.root.clientHeight - px(style.paddingTop) - px(style.paddingBottom) - px(style.rowGap) * 2 - top - bottom;
+    const over = distribution.element.offsetHeight - room;
+    if (over <= 0) return;
+    const bar = distribution.length?.() ?? 0;
+    if (bar - over >= 120) {
+      distribution.orient?.(true, Math.floor(bar - over));
+      return;
+    }
+
+    this.sideToStrip();
+  }
+
+  /** Moves a vertical distribution from the right edge into the strip, horizontal. */
+  private sideToStrip(): void {
+    const distribution = this._content.get(this._mode)?.distribution ?? null;
+    if (!this._distributionOnSide || distribution === null) return;
+    this._distributionOnSide = false;
+    distribution.orient?.(false, 132);
+    this._side.replaceChildren();
+    this.showPanels();
+  }
+
   private buildPanels(): Record<PanelName, Panel> {
     const s = this._samples;
     const b = this._budget;
@@ -700,6 +774,12 @@ export class Overlay {
     this._rows.append(element);
     return { metric, element, value, text: '', alert: false, read: safeRead(metric.id, metric.read, finite) };
   }
+}
+
+/** A computed length in px; 0 when the engine leaves it unresolved (e.g. a max() with env()). */
+function px(value: string): number {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function readout(tip: TipContent, label: HTMLElement, width: number): Writable {

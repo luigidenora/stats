@@ -57,7 +57,13 @@ const CSS = `
     'hist     .     side'
     'counters strip backend';
   gap: var(--tez-space-3) var(--tez-space-4);
-  padding: var(--tez-space-3) var(--tez-space-4);
+  /* Safe area: under a notch or a home indicator the edges move in (env() is 0 elsewhere; pages
+     opt in with viewport-fit=cover). layout() reads the computed padding, so the maths follow. */
+  padding:
+    max(var(--tez-space-3), env(safe-area-inset-top, 0px))
+    max(var(--tez-space-4), env(safe-area-inset-right, 0px))
+    max(var(--tez-space-3), env(safe-area-inset-bottom, 0px))
+    max(var(--tez-space-4), env(safe-area-inset-left, 0px));
   color: var(--tez-ink);
   font-family: var(--tez-stats-font, 'Barlow Condensed', 'Roboto Condensed', 'Arial Narrow', sans-serif);
   font-weight: 500;
@@ -242,6 +248,9 @@ const CSS = `
   pointer-events: auto;
 }
 .tez-menu[hidden] { display: none; }
+/* Folded toggles: below the modes, after a thicker rule; checked ones in yellow, like the plate. */
+.tez-menu-first { border-top: 2px solid var(--tez-ink); }
+.tez-menu-toggle[aria-checked='true'] .tez-menu-code { color: var(--tez-alert); }
 /* Rows like a camera menu: hairline separators, the current choice filled in yellow. */
 .tez-menu-item {
   display: flex;
@@ -304,9 +313,9 @@ const CSS = `
 .tez-cpu { color: var(--tez-cpu); }
 .tez-gpu { color: var(--tez-gpu); }
 /* The readout labels carry the series colour only while the graphs that use it are on screen. */
-.tez-stats:not([data-mode='performance']) .tez-c-band .tez-frame,
-.tez-stats:not([data-mode='performance']) .tez-c-band .tez-cpu,
-.tez-stats:not([data-mode='performance']) .tez-c-band .tez-gpu { color: inherit; }
+.tez-stats:not([data-mode='graph']) .tez-c-band .tez-frame,
+.tez-stats:not([data-mode='graph']) .tez-c-band .tez-cpu,
+.tez-stats:not([data-mode='graph']) .tez-c-band .tez-gpu { color: inherit; }
 .tez-plate {
   /* Pixel-exact centring: the font size makes the capitals exactly --tez-plate-cap tall (Barlow's
      cap height is 0.7 em) and text-box trims the line to the caps, so with a 1px border the
@@ -327,6 +336,32 @@ const CSS = `
   -webkit-text-stroke: 0;
 }
 .tez-plate > span { display: block; text-box: trim-both cap alphabetic; }
+/* Touch: a finger needs about 32px. The plates keep their look; an invisible area around each
+   one takes the tap. Sideways it grows by half the 8px gap only, so neighbours never overlap;
+   the mode plate and its caret touch, so each grows away from the other. */
+@media (pointer: coarse) {
+  .tez-interactive button.tez-plate { position: relative; }
+  .tez-interactive button.tez-plate::after { content: ''; position: absolute; inset: -8px -4px; }
+  .tez-interactive .tez-disp-button::after { inset: -8px 0 -8px -4px; }
+  .tez-interactive .tez-disp-more { padding: 0 6px; }
+  .tez-interactive .tez-disp-more::after { inset: -8px -4px -8px 0; }
+}
+/* Short overlays (a phone on its side): the small type and tighter rows, whatever the width,
+   so the readouts never eat a third of the height. */
+@container tez-stats (max-height: 480px) {
+  .tez-stats > * {
+    --tez-size-value: 22px;
+    --tez-size-row: 17px;
+    --tez-size-stack: 10px;
+    --tez-size-unit: 13px;
+    --tez-plate-h: 16px;
+    --tez-plate-cap: 8px;
+    --tez-space-5: 16px;
+  }
+
+  .tez-stats .tez-mode-icon-l { display: none; }
+  .tez-stats .tez-mode-icon-s { display: block; }
+}
 @container tez-stats (max-width: 640px) {
   .tez-stats > * {
     --tez-size-value: 22px;

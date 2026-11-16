@@ -264,3 +264,47 @@ describe('layout smoke test', () => {
     expect(stats.element.querySelector('.tez-c-hist canvas')).not.toBeNull();
   });
 });
+
+describe('toggles that do not fit', () => {
+  const restore: (() => void)[] = [];
+  beforeEach(() => {
+    // A 375px overlay whose plate row would need 400px.
+    const sizes: [string, (element: HTMLElement) => number][] = [
+      ['clientWidth', () => 375], ['clientHeight', () => 700],
+      ['offsetWidth', (element) => (element.classList.contains('tez-c-backend') && element.querySelector('.tez-toggle:not([hidden])') !== null ? 400 : 40)],
+      ['offsetHeight', () => 20]
+    ];
+    for (const [key, read] of sizes) {
+      const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key) ?? Object.getOwnPropertyDescriptor(Element.prototype, key);
+      Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get(this: HTMLElement) { return read(this); } });
+      restore.push(() => {
+        if (descriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, key);
+        else Object.defineProperty(HTMLElement.prototype, key, descriptor);
+      });
+    }
+  });
+
+  afterEach(() => {
+    while (restore.length > 0) must(restore.pop())();
+  });
+
+  it('move into the mode menu as checkable rows, and still switch', () => {
+    const stats = setup({ mode: 'graph' });
+    const onChange = vi.fn();
+    stats.addControl({ id: 'wire', label: 'WIRE', description: 'Wireframe', onChange });
+    window.dispatchEvent(new Event('resize'));
+    run(stats, 0.3);
+    const plate = must(Array.from(stats.element.querySelectorAll<HTMLButtonElement>('button.tez-toggle')).find((button) => button.textContent === 'WIRE'));
+    expect(plate.hidden).toBe(true);
+    expect(stats.element.classList.contains('tez-folded')).toBe(true);
+    q(stats, '.tez-disp-more').click();
+    const rows = Array.from(stats.element.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]'));
+    expect(rows.map((row) => row.textContent)).toEqual(['Record a session: click to start, click again to stop and get a report.REC', 'WireframeWIRE']);
+    rows[1].click();
+    expect(onChange).toHaveBeenLastCalledWith(true);
+    expect(q(stats, '.tez-menu').hidden).toBe(true);
+    q(stats, '.tez-disp-more').click();
+    expect(stats.element.querySelectorAll('[role="menuitemcheckbox"]')[1].getAttribute('aria-checked')).toBe('true');
+  });
+});
+

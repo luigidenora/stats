@@ -37,6 +37,14 @@ export function findMode(modes: readonly ModeInfo[], id: StatsMode): ModeInfo | 
   return null;
 }
 
+/** A toggle shown in the menu when the plate row has no room for it. */
+export interface MenuToggle {
+  label: string;
+  description: string;
+  active: boolean;
+  set: (active: boolean) => void;
+}
+
 /** The mode plate and its menu. */
 export class ModeControl {
   public readonly element: HTMLDivElement;
@@ -48,7 +56,12 @@ export class ModeControl {
   private readonly _menu: HTMLDivElement;
   private _mode: StatsMode;
 
-  constructor(initial: StatsMode, private readonly _modes: () => readonly ModeInfo[], private readonly _onChange: (mode: StatsMode) => void) {
+  constructor(
+    initial: StatsMode,
+    private readonly _modes: () => readonly ModeInfo[],
+    private readonly _onChange: (mode: StatsMode) => void,
+    private readonly _toggles: () => readonly MenuToggle[] = () => []
+  ) {
     this._mode = initial;
     this.element = document.createElement('div');
     this.element.className = 'tez-disp';
@@ -176,6 +189,29 @@ export class ModeControl {
       item.append(name, code);
       item.addEventListener('click', () => {
         this.select(info.id);
+      });
+      items.push(item);
+    }
+
+    // Toggles that did not fit next to the plate: the same switches, as checkable rows.
+    const toggles = this._toggles();
+    for (let i = 0, l = toggles.length; i < l; i++) {
+      const toggle = toggles[i];
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = i === 0 ? 'tez-menu-item tez-menu-toggle tez-menu-first' : 'tez-menu-item tez-menu-toggle';
+      item.setAttribute('role', 'menuitemcheckbox');
+      item.setAttribute('aria-checked', String(toggle.active));
+      item.dataset['tip'] = toggle.description;
+      const name = document.createElement('span');
+      name.textContent = toggle.description;
+      const code = document.createElement('span');
+      code.className = 'tez-menu-code';
+      code.textContent = toggle.label;
+      item.append(name, code);
+      item.addEventListener('click', () => {
+        toggle.set(!toggle.active);
+        this.closeMenu();
       });
       items.push(item);
     }
